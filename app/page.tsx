@@ -1,10 +1,10 @@
-import Chat from "./components/Chat";
+import { Suspense } from "react";
+import ChatClient from "./components/ChatClient";
 
 export default function Page() {
   return (
-    <div className="h-full">
-      <Chat />
-    </div>
+    <Suspense fallback={<div style={{ padding: 16 }}>Loading…</div>}>
+      <ChatClient />
+    </Suspense>
   );
 }
-
