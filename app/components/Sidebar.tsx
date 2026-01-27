@@ -40,7 +40,6 @@ export default function Sidebar() {
   async function loadSessions() {
     try {
       const data: any = await apiGet("/memory/sessions");
-
       const raw = (data?.items ?? data?.sessions ?? []) as any[];
 
       const normalized: SessionItem[] = raw
@@ -61,7 +60,7 @@ export default function Sidebar() {
 
   useEffect(() => {
     loadSessions();
-    const t = setInterval(loadSessions, 3000); // refresh list every 3 seconds
+    const t = setInterval(loadSessions, 3000);
     return () => clearInterval(t);
   }, [activeSid]);
 
@@ -77,7 +76,6 @@ export default function Sidebar() {
       setItems((prev) => prev.filter((x) => x.sid !== sid));
       setOpenMenu(null);
 
-      // If deleting active session, jump to new chat
       if (activeSid === sid) {
         const newOne = newSid();
         const base = pathname === "/chat" ? "/chat" : "/";
@@ -88,8 +86,28 @@ export default function Sidebar() {
     }
   }
 
+  function goTo(href: string) {
+    setOpenMenu(null);
+
+    // ✅ close mobile drawer if open
+    const nav = document.getElementById("nav") as HTMLInputElement | null;
+    if (nav) nav.checked = false;
+
+    router.push(href);
+  }
+
+  function goToSid(sid: string) {
+    setOpenMenu(null);
+
+    const nav = document.getElementById("nav") as HTMLInputElement | null;
+    if (nav) nav.checked = false;
+
+    const base = pathname === "/chat" ? "/chat" : "/";
+    router.replace(`${base}?sid=${encodeURIComponent(sid)}`);
+  }
+
   return (
-    <aside className="hidden md:flex w-64 flex-col border-r border-white/10 overflow-hidden">
+    <aside className="flex w-full max-w-[320px] flex-col border-r border-white/10 overflow-hidden">
       {/* Brand */}
       <div className="p-5">
         <div className="text-xl font-semibold">Nova Human</div>
@@ -97,9 +115,8 @@ export default function Sidebar() {
         <button
           onClick={() => {
             const sid = newSid();
-            router.replace(`/`);
             const base = pathname === "/chat" ? "/chat" : "/";
-            router.replace(`${base}?sid=${encodeURIComponent(sid)}`);
+            goToSid(sid);
           }}
           className="mt-3 rounded-md bg-white/5 px-3 py-2 text-sm text-zinc-100"
         >
@@ -109,11 +126,36 @@ export default function Sidebar() {
 
       {/* Main nav */}
       <nav className="px-3 pb-2 flex flex-col gap-1">
-        <NavLink href="/" label="Chat" />
-        <NavLink href="/direction" label="Direction" />
-        <NavLink href="/habits" label="Habits" />
-        <NavLink href="/check-in" label="Check-in" />
-        <NavLink href="/dashboard" label="Dashboard" />
+        <button
+          onClick={() => goTo("/")}
+          className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
+        >
+          Chat
+        </button>
+        <button
+          onClick={() => goTo("/direction")}
+          className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
+        >
+          Direction
+        </button>
+        <button
+          onClick={() => goTo("/habits")}
+          className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
+        >
+          Habits
+        </button>
+        <button
+          onClick={() => goTo("/check-in")}
+          className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
+        >
+          Check-in
+        </button>
+        <button
+          onClick={() => goTo("/dashboard")}
+          className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
+        >
+          Dashboard
+        </button>
       </nav>
 
       {/* Divider */}
@@ -129,14 +171,11 @@ export default function Sidebar() {
               key={it.sid}
               className={[
                 "group flex items-center justify-between rounded-lg px-2 py-2 hover:bg-white/5",
-                activeSid === it.sid ? "bg-white/10" : "",
+                isActive ? "bg-white/10" : "",
               ].join(" ")}
             >
               <button
-                onClick={() => {
-                  const base = pathname === "/chat" ? "/chat" : "/";
-                  router.replace(`${base}?sid=${encodeURIComponent(it.sid)}`);
-                }}
+                onClick={() => goToSid(it.sid)}
                 className="flex-1 text-left min-w-0"
                 title={it.title}
               >
@@ -151,7 +190,7 @@ export default function Sidebar() {
               {/* 3-dot menu */}
               <div className="relative">
                 <button
-                  className="opacity-0 group-hover:opacity-100 px-2 text-zinc-400 hover:text-zinc-200"
+                  className="opacity-100 md:opacity-0 md:group-hover:opacity-100 px-2 text-zinc-400 hover:text-zinc-200"
                   title="More"
                   onClick={(e) => {
                     e.preventDefault();
