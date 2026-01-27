@@ -1,29 +1,10 @@
 import { apiGet, apiPost } from "./api";
 
-export function fetchDirection() {
-  return apiGet("/memory/direction");
-}
-
-export function saveDirectionDraft(body: any) {
-  return apiPost("/memory/direction/draft", body);
-}
-
-export function lockDirection(body: any) {
-  return apiPost("/memory/direction/lock", body);
-}
-
-export function finalizeDirection() {
-  return apiPost("/memory/direction/finalize", {});
-}
-
-export function setTodayStep(body: { text: string; estimate_min?: number }) {
-  return apiPost("/memory/direction/today_step", body);
-}
-
-export function doneTodayStep() {
-  return apiPost("/memory/direction/today_step/done", {});
-}
-
-export function addDirectionProgress(delta: number) {
-  return apiPost("/memory/direction/progress/add", { delta });
-}
+export const fetchDirection = () => apiGet("/memory/direction");
+export const saveDirectionDraft = (body: any) => apiPost("/memory/direction/draft", body);
+export const lockDirection = (body: any) => apiPost("/memory/direction/lock", body);
+export const finalizeDirection = () => apiPost("/memory/direction/finalize", {});
+export const setTodayStep = (body: any) => apiPost("/memory/direction/today_step", body);
+export const doneTodayStep = () => apiPost("/memory/direction/today_step/done", {});
+export const addDirectionProgress = (delta: number) =>
+  apiPost("/memory/direction/progress/add", { delta });
