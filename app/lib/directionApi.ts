@@ -16,10 +16,14 @@ export function finalizeDirection() {
   return apiPost("/memory/direction/finalize", {});
 }
 
-export function setTodayStep(body: any) {
+export function setTodayStep(body: { text: string; estimate_min?: number }) {
   return apiPost("/memory/direction/today_step", body);
 }
 
 export function doneTodayStep() {
   return apiPost("/memory/direction/today_step/done", {});
+}
+
+export function addDirectionProgress(delta: number) {
+  return apiPost("/memory/direction/progress/add", { delta });
 }
