@@ -419,10 +419,8 @@ export default function DirectionPage() {
       const ts = dir?.today_step;
       setStepText(ts?.text ?? "");
       setStepMin(ts?.estimate_min ?? 25);
-    } catch {
-      setErr(
-        "Failed to fetch Direction. Is backend running on https://nova-human-backend.onrender.com"
-      );
+    } catch (e: any) {
+      setErr(e?.message || String(e));
     }
   }
 

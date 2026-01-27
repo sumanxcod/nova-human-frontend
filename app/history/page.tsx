@@ -20,8 +20,8 @@ export default function HistoryPage() {
       try {
         const data = await apiGet<HistoryItem[]>("/memory/history");
         setItems(Array.isArray(data) ? data : []);
-      } catch {
-        setErr("Couldn’t load history. Is backend running on https://nova-human-backend.onrender.com");
+      } catch (e: any) {
+        setErr(e?.message || String(e));
       }
     })();
   }, []);

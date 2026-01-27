@@ -1,6 +1,6 @@
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE?.trim() ||
-  "https://nova-human-backend.onrender.com";
+  "https://nova-human-backend-1.onrender.com";
 
 function withTimeout(ms: number) {
   const c = new AbortController();
