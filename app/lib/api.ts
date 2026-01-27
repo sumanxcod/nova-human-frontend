@@ -1,6 +1,8 @@
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ||
-  "https://nova-human-backend-1.onrender.com";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE?.trim();
+if (!API_BASE) {
+  throw new Error("NEXT_PUBLIC_API_BASE is missing in production env");
+}
+
 
 
 function withTimeout(ms: number) {
@@ -15,6 +17,9 @@ async function readTextSafe(res: Response) {
   } catch {
     return "";
   }
+}
+if (!process.env.NEXT_PUBLIC_API_BASE) {
+  throw new Error("NEXT_PUBLIC_API_BASE is missing");
 }
 
 export async function apiGet<T = any>(path: string): Promise<T> {
