@@ -35,7 +35,7 @@ export default function CheckInPage() {
       setData(d);
 
       if (d.checkin) {
-        setMovedForward(d.checkin.moved_forward);
+        setMovedForward(Boolean(d.checkin.moved_forward));
         setTodayAction(d.checkin.today_action || "");
         setNote(d.checkin.note || "");
       } else {
@@ -44,7 +44,7 @@ export default function CheckInPage() {
         setNote("");
       }
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to load check-in");
+      setErr(e?.message || String(e));
       setData(null);
     } finally {
       setLoading(false);
@@ -69,15 +69,15 @@ export default function CheckInPage() {
     setErr(null);
 
     try {
-      await apiPost("/memory/checkin/submit", {
-        moved_forward: movedForward,
+      await apiPost("/memory/checkin/today", {
+        moved_forward: movedForward ? 1 : 0, // ✅ backend expects 0/1
         today_action: todayAction.trim(),
         note: note.trim(),
       });
 
       await load();
     } catch (e: any) {
-      setErr(e?.message ?? "Failed to submit check-in");
+      setErr(e?.message || String(e));
     }
   }
 
@@ -89,9 +89,7 @@ export default function CheckInPage() {
     <div className="p-6 space-y-5">
       <div>
         <h1 className="text-2xl font-semibold">Check-in</h1>
-        <p className="text-sm opacity-70">
-          Daily execution, not motivation.
-        </p>
+        <p className="text-sm opacity-70">Daily execution, not motivation.</p>
       </div>
 
       {data && (
@@ -138,9 +136,7 @@ export default function CheckInPage() {
           </button>
         </div>
 
-        <div className="text-sm font-medium">
-          2) Your one action for today
-        </div>
+        <div className="text-sm font-medium">2) Your one action for today</div>
 
         <input
           value={todayAction}
@@ -149,9 +145,7 @@ export default function CheckInPage() {
           className="w-full rounded-xl bg-zinc-900 border border-zinc-800 px-4 py-3 text-sm outline-none focus:border-zinc-600"
         />
 
-        <div className="text-sm font-medium">
-          Optional: what’s weighing on you?
-        </div>
+        <div className="text-sm font-medium">Optional: what’s weighing on you?</div>
 
         <textarea
           value={note}
