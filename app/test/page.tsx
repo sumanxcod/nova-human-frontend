@@ -19,7 +19,7 @@ export default function TestPage() {
       const r = await apiPost("/memory/chat", { sid: "demo", message: "Hello Nova" });
       setReply(r);
     } catch (e: any) {
-      setErr(String(e));
+      setErr(e?.message || String(e));
     }
   }
 

@@ -38,25 +38,30 @@ export default function Sidebar() {
   const activeSid = searchParams.get("sid") || "";
 
   async function loadSessions() {
-    try {
-      const data: any = await apiGet("/memory/sessions");
-      const raw = (data?.items ?? data?.sessions ?? []) as any[];
+  try {
+    // wake backend cheaply
+    await apiGet("/health");
 
-      const normalized: SessionItem[] = raw
-        .map((s) => ({
-          sid: String(s?.sid ?? s?.id ?? ""),
-          title: String(s?.title ?? "New chat"),
-          last: typeof s?.last === "string" ? s.last : "",
-          updated_at: typeof s?.updated_at === "string" ? s.updated_at : "",
-          count: Number.isFinite(Number(s?.count)) ? Number(s.count) : 0,
-        }))
-        .filter((s) => s.sid.length > 0);
+    const data: any = await apiGet("/memory/sessions");
+    const raw = (data?.items ?? data?.sessions ?? []) as any[];
 
-      setItems(normalized);
-    } catch {
-      setItems([]);
-    }
+    const normalized: SessionItem[] = raw
+      .map((s) => ({
+        sid: String(s?.sid ?? s?.id ?? ""),
+        title: String(s?.title ?? "New chat"),
+        last: typeof s?.last === "string" ? s.last : "",
+        updated_at: typeof s?.updated_at === "string" ? s.updated_at : "",
+        count: Number.isFinite(Number(s?.count)) ? Number(s.count) : 0,
+      }))
+      .filter((s) => s.sid.length > 0);
+
+    setItems(normalized);
+  } catch {
+    // Don’t wipe to empty every time; keep last known list
+    // setItems([]);  <-- remove this
   }
+}
+
 
   useEffect(() => {
     loadSessions();

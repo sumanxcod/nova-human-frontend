@@ -1,14 +1,10 @@
 "use client";
+
 import { useEffect, useRef, useState } from "react";
 import { apiGet, apiPost } from "../lib/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import { fetchTodayCheckin } from "../lib/checkinApi";
 import { fetchDirection } from "../lib/directionApi";
-console.log("API BASE:", process.env.NEXT_PUBLIC_API_BASE);
-fetch(`${process.env.NEXT_PUBLIC_API_BASE}/health`)
-  .then(res => res.json())
-  .then(console.log)
-  .catch(console.error);
 
 export type Msg = {
   role: "user" | "assistant";
@@ -37,19 +33,46 @@ type CheckinResponse = {
 function detectCategory(text: string) {
   const t = text.toLowerCase();
 
-  if (t.includes("dropship") || t.includes("shopify") || t.includes("supplier") || t.includes("ads"))
+  if (
+    t.includes("dropship") ||
+    t.includes("shopify") ||
+    t.includes("supplier") ||
+    t.includes("ads")
+  )
     return "business_dropshipping";
 
-  if (t.includes("resume") || t.includes("cv") || t.includes("interview") || t.includes("job") || t.includes("apply"))
+  if (
+    t.includes("resume") ||
+    t.includes("cv") ||
+    t.includes("interview") ||
+    t.includes("job") ||
+    t.includes("apply")
+  )
     return "career_job";
 
-  if (t.includes("youtube") || t.includes("channel") || t.includes("video") || t.includes("subscribers"))
+  if (
+    t.includes("youtube") ||
+    t.includes("channel") ||
+    t.includes("video") ||
+    t.includes("subscribers")
+  )
     return "creator_youtube";
 
-  if (t.includes("anxious") || t.includes("depressed") || t.includes("panic") || t.includes("stress") || t.includes("sleep"))
+  if (
+    t.includes("anxious") ||
+    t.includes("depressed") ||
+    t.includes("panic") ||
+    t.includes("stress") ||
+    t.includes("sleep")
+  )
     return "mental_health";
 
-  if (t.includes("focus") || t.includes("procrast") || t.includes("stuck") || t.includes("discipline"))
+  if (
+    t.includes("focus") ||
+    t.includes("procrast") ||
+    t.includes("stuck") ||
+    t.includes("discipline")
+  )
     return "clarity_focus";
 
   return "general";
@@ -111,7 +134,8 @@ function coerceMessages(input: any): Msg[] | null {
     .map((m: any) => {
       const role = m?.role;
       const content = m?.content ?? m?.message ?? m?.text ?? "";
-      if ((role !== "user" && role !== "assistant") || typeof content !== "string") return null;
+      if ((role !== "user" && role !== "assistant") || typeof content !== "string")
+        return null;
 
       const c = content.trim();
       if (!c) return null;
@@ -145,7 +169,12 @@ function extractAssistantText(res: any): string {
 
   const a = res?.assistant;
   if (typeof a === "string" && a.trim()) return a.trim();
-  if (typeof a === "object" && a?.content && typeof a.content === "string" && a.content.trim())
+  if (
+    typeof a === "object" &&
+    a?.content &&
+    typeof a.content === "string" &&
+    a.content.trim()
+  )
     return a.content.trim();
 
   const inner = res?.data;
@@ -180,25 +209,67 @@ export default function Chat() {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const shouldAutoScrollRef = useRef(true);
 
-  // ✅ Load chat history ONLY if sid exists
+  // --------------------
+  // ✅ Helper (inside component): wake + sleep
+  // --------------------
+  async function wakeBackendOnce() {
+    try {
+      await apiGet("/health");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function sleep(ms: number) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
+  // --------------------
+  // ✅ Load chat history with retry (sid-based)
+  // --------------------
   useEffect(() => {
     if (!sid) return;
 
-    (async () => {
-      try {
-        const data = await apiGet<any>(`/memory/chat?sid=${encodeURIComponent(sid)}`);
-        const list = coerceMessages(data);
-        setMessages(list?.length ? list : []);
-        setErr(null);
-      } catch {
-        setMessages([]);
-        setErr("Couldn’t load backend memory. Make sure backend is running on https://nova-human-backend.onrender.com");
+    let cancelled = false;
+
+    async function loadChatWithRetry() {
+      setErr(null);
+
+      for (const delay of [0, 1500, 3500]) {
+        if (delay) await sleep(delay);
+        if (cancelled) return;
+
+        try {
+          await wakeBackendOnce();
+
+          const data = await apiGet<any>(
+            `/memory/chat?sid=${encodeURIComponent(sid)}`
+          );
+          const list = coerceMessages(data);
+
+          if (cancelled) return;
+          setMessages(list?.length ? list : []);
+          setErr(null);
+          return;
+        } catch (e: any) {
+          if (cancelled) return;
+          setErr(
+            delay === 3500 ? (e?.message || String(e)) : "Waking backend… retrying…"
+          );
+        }
       }
-    })();
+    }
+
+    loadChatWithRetry();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sid]);
 
-  // Load direction + today check-in
+  // ---- Load direction + today check-in (execution header) ----
   useEffect(() => {
     (async () => {
       try {
@@ -214,23 +285,26 @@ export default function Chat() {
     })();
   }, []);
 
-  // Prefill from dashboard CTA
+  // Prefill from dashboard CTA (/?prefill=...)
   useEffect(() => {
     const prefill = searchParams.get("prefill");
     if (prefill) setInput(prefill);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, []);
 
-  // Auto-scroll only if user near bottom
+  // Auto-scroll within message list (only if user is near bottom)
   useEffect(() => {
     if (!shouldAutoScrollRef.current) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  // --------------------
+  // ✅ send(): create sid only on first real message
+  // --------------------
   async function send() {
     const text = input.trim();
-    if (!text) return;
-    if (sendingRef.current) return;
+    if (!text) return; // 🔒 DO NOTHING if empty
+    if (sendingRef.current) return; // 🔒 HARD LOCK
 
     sendingRef.current = true;
     setInput("");
@@ -239,7 +313,7 @@ export default function Chat() {
 
     let effectiveSid = sid;
 
-    // ✅ Create sid ONLY when sending first real message
+    // ✅ create session ONLY when user sends first message
     if (!effectiveSid) {
       effectiveSid = newSid();
       router.replace(`/?sid=${encodeURIComponent(effectiveSid)}`);
@@ -292,9 +366,11 @@ export default function Chat() {
         ...prev,
         {
           role: "assistant",
-          content: "I couldn’t reach the backend. Make sure it’s running on https://nova-human-backend.onrender.com.",
+          content:
+            "I couldn’t reach the backend. Please hit Retry or refresh the page.",
         },
       ]);
+      setErr("Backend not reachable.");
     } finally {
       sendingRef.current = false;
       setLoading(false);
@@ -316,7 +392,7 @@ export default function Chat() {
       setErr(null);
       didNudgeRef.current = false;
     } catch {
-      setErr("Couldn’t clear backend memory. Is the backend running?");
+      setErr("Couldn’t clear backend memory.");
     }
   }
 
@@ -385,12 +461,24 @@ export default function Chat() {
               const showAvatar = !isUser && !prevSame;
 
               const bubbleRadius = isUser
-                ? ["rounded-2xl", prevSame ? "rounded-tr-md" : "", nextSame ? "rounded-br-md" : ""].join(" ")
-                : ["rounded-2xl", prevSame ? "rounded-tl-md" : "", nextSame ? "rounded-bl-md" : ""].join(" ");
+                ? [
+                    "rounded-2xl",
+                    prevSame ? "rounded-tr-md" : "",
+                    nextSame ? "rounded-br-md" : "",
+                  ].join(" ")
+                : [
+                    "rounded-2xl",
+                    prevSame ? "rounded-tl-md" : "",
+                    nextSame ? "rounded-bl-md" : "",
+                  ].join(" ");
 
               return (
                 <div key={i}>
-                  <div className={`flex items-end ${isUser ? "justify-end" : "justify-start"} gap-2`}>
+                  <div
+                    className={`flex items-end ${
+                      isUser ? "justify-end" : "justify-start"
+                    } gap-2`}
+                  >
                     {!isUser && (
                       <div className="w-8">
                         {showAvatar ? (
@@ -407,7 +495,9 @@ export default function Chat() {
                       className={[
                         "max-w-[85%] px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap",
                         bubbleRadius,
-                        isUser ? "bg-blue-600 text-white" : "bg-white/5 text-zinc-100 border border-white/10",
+                        isUser
+                          ? "bg-blue-600 text-white"
+                          : "bg-white/5 text-zinc-100 border border-white/10",
                       ].join(" ")}
                     >
                       {m.content}
@@ -442,9 +532,18 @@ export default function Chat() {
         </div>
       </main>
 
+      {/* ✅ Error + Retry button */}
       {err && (
-        <div className="shrink-0 max-w-2xl mx-auto w-full px-4 py-2 text-xs text-red-400">
-          {err}
+        <div className="shrink-0 max-w-2xl mx-auto w-full px-4 py-2 text-xs text-red-400 flex items-center justify-between gap-3">
+          <span>{err}</span>
+          <button
+            onClick={() => {
+              window.location.reload();
+            }}
+            className="rounded-lg bg-white/10 border border-white/10 px-3 py-1 text-xs text-zinc-100"
+          >
+            Retry
+          </button>
         </div>
       )}
 
@@ -484,7 +583,10 @@ export default function Chat() {
           </div>
 
           <div className="mt-2 text-[11px] text-zinc-500">
-            Session: <span className="text-zinc-300">{sid ? sid : "not created yet"}</span>
+            Session:{" "}
+            <span className="text-zinc-300">
+              {sid ? sid : "not created yet"}
+            </span>
           </div>
 
           {/* <button onClick={clearChat} className="mt-2 text-xs underline text-zinc-400">Clear chat</button> */}
