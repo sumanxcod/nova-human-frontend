@@ -112,8 +112,8 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="flex w-full max-w-[320px] flex-col border-r border-white/10 overflow-hidden">
-      {/* Brand */}
+    <aside className="w-64 flex flex-col border-r border-white/10 overflow-hidden bg-zinc-950">
+        {/* Brand */}
       <div className="p-5">
         <div className="text-xl font-semibold">Nova Human</div>
 
@@ -150,7 +150,7 @@ export default function Sidebar() {
           Habits
         </button>
         <button
-          onClick={() => goTo("/check-in")}
+          onClick={() => goTo("/checkin")}
           className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
         >
           Check-in
