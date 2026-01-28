@@ -8,6 +8,7 @@ type SessionItem = {
   sid: string;
   title: string;
   last: string;
+
   updated_at: string;
   count: number;
 };
@@ -154,7 +155,7 @@ export default function Sidebar() {
           onClick={() => goTo("/checkin")}
           className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
         >
-          Check-in
+          Checkin
         </button>
         <button
           onClick={() => goTo("/dashboard")}
