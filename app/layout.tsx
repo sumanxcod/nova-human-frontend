@@ -3,32 +3,32 @@ import "./globals.css";
 import { Suspense } from "react";
 import SidebarClient from "./components/SidebarClient";
 import MobileShell from "./mobile-shell";
+import MobileTabs from "./components/MobileTabs";
 
 export const metadata: Metadata = {
   title: "Nova Human",
   description: "Nova Human — chat-first personal OS",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className="text-zinc-100">
         <MobileShell>
-          {/* Desktop sidebar */}
-          <div className="hidden md:block">
-            <Suspense fallback={null}>
-              <SidebarClient />
-            </Suspense>
-          </div>
+          <Suspense fallback={null}>
+            <SidebarClient />
+          </Suspense>
 
-          {/* Main */}
           <main className="flex-1 flex flex-col overflow-hidden w-full">
-            <div className="flex-1 overflow-hidden">{children}</div>
+            <div className="flex-1 overflow-hidden pb-16 md:pb-0">
+              {children}
+            </div>
           </main>
+
+          <MobileTabs />
         </MobileShell>
       </body>
     </html>
   );
 }
+

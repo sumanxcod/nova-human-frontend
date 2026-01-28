@@ -134,7 +134,10 @@ function coerceMessages(input: any): Msg[] | null {
     .map((m: any) => {
       const role = m?.role;
       const content = m?.content ?? m?.message ?? m?.text ?? "";
-      if ((role !== "user" && role !== "assistant") || typeof content !== "string")
+      if (
+        (role !== "user" && role !== "assistant") ||
+        typeof content !== "string"
+      )
         return null;
 
       const c = content.trim();
@@ -292,10 +295,17 @@ export default function Chat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-scroll within message list (only if user is near bottom)
+  // ✅ Auto-scroll within message list (mobile = instant, desktop = smooth)
   useEffect(() => {
     if (!shouldAutoScrollRef.current) return;
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+
+    const isMobile =
+      typeof window !== "undefined" &&
+      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    bottomRef.current?.scrollIntoView({
+      behavior: isMobile ? "auto" : "smooth",
+    });
   }, [messages, loading]);
 
   // --------------------
@@ -344,7 +354,8 @@ export default function Chat() {
             ...prev,
             {
               role: "assistant",
-              content: assistantText || "I’m here. What do you want to work on next?",
+              content:
+                assistantText || "I’m here. What do you want to work on next?",
             },
           ];
 
@@ -361,7 +372,7 @@ export default function Chat() {
           return next;
         });
       }
-    } catch {
+    } catch (e: any) {
       setMessages((prev) => [
         ...prev,
         {
@@ -370,7 +381,7 @@ export default function Chat() {
             "I couldn’t reach the backend. Please hit Retry or refresh the page.",
         },
       ]);
-      setErr("Backend not reachable.");
+      setErr(e?.message || "Backend not reachable.");
     } finally {
       sendingRef.current = false;
       setLoading(false);
@@ -391,8 +402,8 @@ export default function Chat() {
       setMessages([]);
       setErr(null);
       didNudgeRef.current = false;
-    } catch {
-      setErr("Couldn’t clear backend memory.");
+    } catch (e: any) {
+      setErr(e?.message || "Couldn’t clear backend memory.");
     }
   }
 
@@ -535,11 +546,9 @@ export default function Chat() {
       {/* ✅ Error + Retry button */}
       {err && (
         <div className="shrink-0 max-w-2xl mx-auto w-full px-4 py-2 text-xs text-red-400 flex items-center justify-between gap-3">
-          <span>{err}</span>
+          <span className="break-words">{err}</span>
           <button
-            onClick={() => {
-              window.location.reload();
-            }}
+            onClick={() => window.location.reload()}
             className="rounded-lg bg-white/10 border border-white/10 px-3 py-1 text-xs text-zinc-100"
           >
             Retry
@@ -571,7 +580,7 @@ export default function Chat() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
               placeholder="Stuck? Talk it through… (Enter to send, Shift+Enter for a new line)"
-              className="flex-1 resize-none rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-sm outline-none focus:border-white/20 min-h-[48px] max-h-40"
+              className="flex-1 resize-none rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-[16px] outline-none focus:border-white/20 min-h-[48px] max-h-40"
             />
             <button
               onClick={send}
@@ -584,9 +593,7 @@ export default function Chat() {
 
           <div className="mt-2 text-[11px] text-zinc-500">
             Session:{" "}
-            <span className="text-zinc-300">
-              {sid ? sid : "not created yet"}
-            </span>
+            <span className="text-zinc-300">{sid ? sid : "not created yet"}</span>
           </div>
 
           {/* <button onClick={clearChat} className="mt-2 text-xs underline text-zinc-400">Clear chat</button> */}

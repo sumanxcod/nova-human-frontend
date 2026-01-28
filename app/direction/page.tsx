@@ -394,7 +394,7 @@ export default function DirectionPage() {
     // 3) Add +1 progress
     const res = await addDirectionProgress(1);
     setD((prev) =>
-      prev ? { ...prev, metric_progress: res.metric_progress } : prev
+    prev ? { ...prev, metric_progress: res.metric_progress } : prev
     );
   }
 

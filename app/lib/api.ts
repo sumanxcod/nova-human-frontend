@@ -1,65 +1,79 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE?.trim();
-if (!API_BASE) {
-  throw new Error("NEXT_PUBLIC_API_BASE is missing in production env");
+// lib/api.ts
+export const API_BASE =
+  (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/$/, "") ||
+  "http://localhost:8000";
+
+// Build a clean URL no matter if path has / or not
+function url(path: string) {
+  if (!path.startsWith("/")) path = "/" + path;
+  return `${API_BASE}${path}`;
 }
 
+// Read response safely (json OR text)
+async function readBody(res: Response) {
+  const contentType = res.headers.get("content-type") || "";
+  const text = await res.text();
 
-
-function withTimeout(ms: number) {
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), ms);
-  return { signal: c.signal, cancel: () => clearTimeout(t) };
-}
-
-async function readTextSafe(res: Response) {
-  try {
-    return await res.text();
-  } catch {
-    return "";
+  if (contentType.includes("application/json")) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      // fall through
+    }
   }
-}
-if (!process.env.NEXT_PUBLIC_API_BASE) {
-  throw new Error("NEXT_PUBLIC_API_BASE is missing");
+  return text;
 }
 
-export async function apiGet<T = any>(path: string): Promise<T> {
-  const { signal, cancel } = withTimeout(15000);
+async function request<T>(
+  method: "GET" | "POST",
+  path: string,
+  body?: any,
+  timeoutMs = 20000
+): Promise<T> {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
-    const res = await fetch(`${API_BASE}${path}`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      credentials: "omit",
-      signal,
-    });
+    const init: RequestInit = {
+      method,
+      signal: controller.signal,
+      // IMPORTANT:
+      // - do NOT send Content-Type on GET (avoids CORS preflight)
+      // - do NOT use credentials unless you truly need cookies
+      headers:
+        method === "POST"
+          ? { "Content-Type": "application/json", Accept: "application/json" }
+          : { Accept: "application/json" },
+      body: method === "POST" ? JSON.stringify(body ?? {}) : undefined,
+    };
+
+    const res = await fetch(url(path), init);
+    const payload = await readBody(res);
 
     if (!res.ok) {
-      const txt = await readTextSafe(res);
-      throw new Error(`GET ${path} -> ${res.status} ${txt}`);
+      const msg =
+        typeof payload === "string"
+          ? payload
+          : payload?.detail || payload?.message || JSON.stringify(payload);
+
+      throw new Error(`${res.status} ${res.statusText} — ${msg}`);
     }
-    return res.json();
+
+    return payload as T;
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      throw new Error(`Request timed out after ${timeoutMs}ms`);
+    }
+    throw new Error(e?.message || String(e));
   } finally {
-    cancel();
+    clearTimeout(t);
   }
 }
 
-export async function apiPost<T = any>(path: string, body: any): Promise<T> {
-  const { signal, cancel } = withTimeout(15000);
-  try {
-    const res = await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      credentials: "omit",
-      signal,
-    });
+export function apiGet<T>(path: string, timeoutMs?: number) {
+  return request<T>("GET", path, undefined, timeoutMs);
+}
 
-    if (!res.ok) {
-      const txt = await readTextSafe(res);
-      throw new Error(`POST ${path} -> ${res.status} ${txt}`);
-    }
-    return res.json();
-  } finally {
-    cancel();
-  }
+export function apiPost<T>(path: string, body?: any, timeoutMs?: number) {
+  return request<T>("POST", path, body, timeoutMs);
 }
