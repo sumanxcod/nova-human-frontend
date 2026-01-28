@@ -112,7 +112,8 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-64 flex flex-col border-r border-white/10 overflow-hidden bg-zinc-950">
+      <div className="h-full flex flex-col overflow-hidden bg-zinc-950">
+
         {/* Brand */}
       <div className="p-5">
         <div className="text-xl font-semibold">Nova Human</div>
@@ -221,6 +222,6 @@ export default function Sidebar() {
           );
         })}
       </div>
-    </aside>
+    </div>
   );
 }
