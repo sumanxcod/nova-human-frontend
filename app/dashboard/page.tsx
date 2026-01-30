@@ -116,7 +116,7 @@ export default function DashboardPage() {
 
           <Card title="Today’s focus">
             <div className="text-sm text-zinc-300">
-              Do one tiny habit and one honest check-in. Consistency beats intensity.
+              Do one tiny habit and one honest checkin. Consistency beats intensity.
             </div>
           </Card>
         </div>

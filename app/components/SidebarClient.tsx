@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import SidebarContent from "./Sidebar"; // or your SidebarContent component import
-
+import Sidebar from "./Sidebar";
+function SidebarContent() {
+  return <Sidebar />;
+}
 export default function SidebarClient() {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -26,7 +28,7 @@ export default function SidebarClient() {
 
       {/* Desktop sidebar */}
       <aside className="hidden md:flex w-64 flex-col border-r border-white/10 overflow-hidden">
-        <SidebarContent />
+        <Sidebar/>
       </aside>
 
       {/* Mobile full-screen drawer */}
@@ -43,7 +45,7 @@ export default function SidebarClient() {
           </div>
 
           <div className="h-[calc(100dvh-52px)] overflow-y-auto overscroll-contain [webkit-overflow-scrolling:touch]">
-            <SidebarContent />
+            <Sidebar />
           </div>
         </aside>
       )}

@@ -73,7 +73,7 @@ function detectCategory(text: string) {
     t.includes("stuck") ||
     t.includes("discipline")
   )
-    return "clarity_focus";
+   return "clarity_focus";
 
   return "general";
 }
@@ -272,7 +272,7 @@ export default function Chat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sid]);
 
-  // ---- Load direction + today check-in (execution header) ----
+  // ---- Load direction + today checkin (execution header) ----
   useEffect(() => {
     (async () => {
       try {

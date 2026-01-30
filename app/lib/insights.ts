@@ -82,8 +82,8 @@ export function generateInsights(habits: Habit[], moods: MoodEntry[]): Insight[]
   // 4) Mood missing
   if (!moodToday) {
     insights.push({
-      title: "No check-in today",
-      body: "Your mood data helps Nova support you better. Do a quick check-in?",
+      title: "No checkin today",
+      body: "Your mood data helps Nova support you better. Do a quick checkin?",
       type: "neutral",
     });
   }

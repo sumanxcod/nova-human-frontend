@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import PreviewGate from "./components/PreviewGate";
 import { Suspense } from "react";
 import SidebarClient from "./components/SidebarClient";
 import MobileShell from "./mobile-shell";
@@ -23,7 +24,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <div className="flex-1 overflow-hidden pb-16 md:pb-0">
               {children}
             </div>
-          </main>
+           </main>
+           <PreviewGate>
+           {children}
+           </PreviewGate>
 
           <MobileTabs />
         </MobileShell>

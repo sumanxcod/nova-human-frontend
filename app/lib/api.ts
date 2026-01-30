@@ -1,7 +1,8 @@
 // lib/api.ts
-export const API_BASE =
-  (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/$/, "") ||
-  "http://localhost:8000";
+const RAW_API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
+export const API_BASE = RAW_API_BASE.replace(/\/+$/, "");
+
 
 // Build a clean URL no matter if path has / or not
 function url(path: string) {
