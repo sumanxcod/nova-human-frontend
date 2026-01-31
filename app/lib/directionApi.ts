@@ -12,3 +12,5 @@ export async function addDirectionProgress(delta: number) {
     { delta }
   );
 }
+export const suggestTodayStep = (body: any) =>
+  apiPost("/memory/direction/today_step/suggest", body);

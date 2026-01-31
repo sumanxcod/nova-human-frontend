@@ -10,6 +10,7 @@ import {
   setTodayStep,
   doneTodayStep,
   addDirectionProgress,
+  suggestTodayStep,
 } from "../lib/directionApi";
 
 type DirectionStatus = "draft" | "calibration" | "locked";
@@ -162,7 +163,7 @@ function FocusCompanion({
     <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
       <div className="flex items-center justify-between">
         <div className="text-sm font-semibold">Focus Companion</div>
-        <div className="text-xs text-zinc-400">Mentor mode</div>
+        <div className="text-xs text-zinc-400">Partner mode</div>
       </div>
 
       {/* Live session */}
@@ -271,7 +272,9 @@ function FocusCompanion({
 
 function getLastDebriefNext() {
   try {
-    const arr = JSON.parse(localStorage.getItem("nova_focus_debrief_v1") || "[]");
+    const arr = JSON.parse(
+      localStorage.getItem("nova_focus_debrief_v1") || "[]"
+    );
     return arr?.[0]?.next?.trim() ? arr[0].next.trim() : null;
   } catch {
     return null;
@@ -394,7 +397,7 @@ export default function DirectionPage() {
     // 3) Add +1 progress
     const res = await addDirectionProgress(1);
     setD((prev) =>
-    prev ? { ...prev, metric_progress: res.metric_progress } : prev
+      prev ? { ...prev, metric_progress: res.metric_progress } : prev
     );
   }
 
@@ -640,33 +643,84 @@ export default function DirectionPage() {
     setFocusLeftMs(0);
   }
 
-  function askNovaLocal() {
-    const b = debrief.blocker.trim().toLowerCase();
-    const n = debrief.next.trim();
+  async function askNovaLocal() {
+  // Guard: need a direction first
+  const directionTitle = (d?.title || "").trim();
+  if (!directionTitle) {
+    setNovaSuggestion("Set your Direction first, then I’ll suggest a Today Step.");
+    return;
+  }
 
-    let out = `Top priority: do the next smallest step.\n`;
+  setNovaSuggestion("Thinking…");
 
-    if (!debrief.summary.trim()) {
-      out += `\nFirst write a 1-line summary of what you did. Keep it simple.`;
-      setNovaSuggestion(out);
+  // Build lightweight context (Direction-only)
+  const payload = {
+    direction: {
+      title: directionTitle,
+      emotion_30: (d?.emotion_30 || "").trim(),
+      consequence: (d?.consequence || "").trim(),
+      duration_days: d?.duration_days ?? duration,
+    },
+    debrief: {
+      did: (debrief.summary || "").trim(),
+      blocked: (debrief.blocker || "").trim(),
+      next: (debrief.next || "").trim(),
+    },
+    current_step: {
+      text: (stepText || "").trim(),
+      estimate_min: Number(stepMin || 25),
+    },
+  };
+
+  // 1) Try backend (OpenAI) suggestion
+  try {
+    const res: any = await suggestTodayStep(payload);
+
+    const step = (res?.step || "").trim();
+    const minutes = Number(res?.minutes || 0);
+    const note = (res?.note || "").trim();
+
+    if (step) {
+      setStepText(step);
+      if (minutes && Number.isFinite(minutes)) setStepMin(minutes);
+
+      // IMPORTANT: we do NOT auto-save (your decision #2)
+      setNovaSuggestion(
+        note ||
+          "Suggested Today Step is filled. Review it, then click “Save step”."
+      );
       return;
     }
-
-    if (b.includes("error") || b.includes("bug") || b.includes("import")) {
-      out += `\nNext step: reproduce the issue in the smallest case, then fix ONE root cause.`;
-    } else if (b.includes("time") || b.includes("late") || b.includes("tired")) {
-      out += `\nNext step: cut scope. Pick a 10-minute version of the task and finish it.`;
-    } else if (b.includes("confus") || b.includes("not sure")) {
-      out += `\nNext step: write 3 micro tasks (10 min each). Choose the easiest and start.`;
-    } else {
-      out += `\nNext step: ${
-        n ? n : "write the next action in one sentence and do it."
-      }`;
-    }
-
-    out += `\n\nRule: one action → done → then decide the next.`;
-    setNovaSuggestion(out);
+  } catch {
+    // fall through to local fallback
   }
+
+  // 2) Fallback (local heuristic) if backend isn’t ready
+  const t = directionTitle.toLowerCase();
+
+  let fallbackStep = "Write your next smallest step in one sentence.";
+  let fallbackMin = 25;
+
+  if (t.includes("build") || t.includes("app") || t.includes("nova")) {
+    fallbackStep = "Pick ONE small feature and ship a working version today.";
+    fallbackMin = 45;
+  } else if (t.includes("job") || t.includes("resume") || t.includes("career")) {
+    fallbackStep = "Apply to 3 roles and update one resume bullet.";
+    fallbackMin = 25;
+  } else if (t.includes("lose weight") || t.includes("fitness") || t.includes("gym")) {
+    fallbackStep = "Do a 20-minute walk + plan your next meal.";
+    fallbackMin = 25;
+  } else if (t.includes("study") || t.includes("exam") || t.includes("class")) {
+    fallbackStep = "Study one topic for 25 minutes and write 5 key points.";
+    fallbackMin = 25;
+  }
+
+  setStepText(fallbackStep);
+  setStepMin(fallbackMin);
+  setNovaSuggestion(
+    "I filled a suggested Today Step (fallback). Review it, then click “Save step”."
+  );
+}
 
   function saveDebriefLocal() {
     const key = "nova_focus_debrief_v1";
@@ -701,7 +755,7 @@ export default function DirectionPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-6">
-        {/* ✅ Error UI with Retry */}
+        {/* Error UI with Retry */}
         {err && (
           <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200 flex items-center justify-between gap-3">
             <span className="break-words">{err}</span>
@@ -825,10 +879,7 @@ export default function DirectionPage() {
                   </div>
 
                   <div className="flex items-center gap-3">
-                    <label
-                      className="text-sm text-zinc-300 w-40"
-                      id="duration-label"
-                    >
+                    <label className="text-sm text-zinc-300 w-40" id="duration-label">
                       Duration
                     </label>
                     <select
@@ -886,10 +937,8 @@ export default function DirectionPage() {
                 </div>
               </div>
             ) : (
-              /* ... keep the rest of your component exactly the same ... */
               <div className="max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-5">
                 {/* Locked summary + unlock */}
-                {/* (UNCHANGED BELOW) */}
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-xs text-zinc-400">Direction</div>
@@ -929,6 +978,15 @@ export default function DirectionPage() {
                   change the direction.
                 </div>
 
+                {/* Clear “what now” instruction */}
+                {status === "locked" && (
+                  <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-200">
+                    Next: Open <span className="font-medium">Partner mode</span>{" "}
+                    and set your <span className="font-medium">Today Step</span>.
+                    Nova will walk with you from there.
+                  </div>
+                )}
+
                 {/* Progress (no manual buttons) */}
                 <div className="mt-4">
                   <div className="flex items-center justify-between text-xs text-zinc-400">
@@ -946,69 +1004,104 @@ export default function DirectionPage() {
                   </div>
 
                   <div className="mt-2 text-xs text-zinc-500">
-                    Auto-tracked when you complete the day.
+                    Complete your Today Step in Partner mode to record progress.
                   </div>
                 </div>
               </div>
             )}
-
-            {/* (Everything after this stays exactly as you already have it) */}
-            {/* ... */}
           </div>
 
           {/* RIGHT */}
-          <div className="hidden md:block">
-            <FocusCompanion
-              isRunning={focusRunning}
-              timeLeftLabel={focusRunning ? formatMs(focusLeftMs) : undefined}
-              directionTitle={d?.title}
-              stepText={stepText}
-              focusDone={focusDone && !focusRunning}
-              debrief={debrief}
-              setDebrief={setDebrief}
-              onAskNova={() => {
-                // keep your existing handler
-                const b = debrief.blocker.trim().toLowerCase();
-                const n = debrief.next.trim();
+          <div className="block">
+            <div className="md:sticky md:top-6 space-y-4">
+              {/* TODAY STEP (Direction-only core) */}
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-semibold">Today Step</div>
+                  <div className="text-xs text-zinc-400">
+                    {done ? "Completed" : "Not done"}
+                  </div>
+                </div>
 
-                let out = `Top priority: do the next smallest step.\n`;
+                <div className="mt-4 space-y-3">
+                  <input
+                    value={stepText}
+                    onChange={(e) => setStepText(e.target.value)}
+                    className="w-full rounded-xl bg-black/30 border border-white/10 px-4 py-3 text-sm outline-none focus:border-white/20"
+                    placeholder="Write one small task you can do today…"
+                  />
 
-                if (!debrief.summary.trim()) {
-                  out += `\nFirst write a 1-line summary of what you did. Keep it simple.`;
-                  setNovaSuggestion(out);
-                  return;
-                }
+                  <div className="flex items-center gap-3">
+                    <div className="text-xs text-zinc-400 w-24">Estimate</div>
+                    <select
+                      value={stepMin}
+                      onChange={(e) => setStepMin(Number(e.target.value))}
+                      className="rounded-xl bg-black/30 border border-white/10 px-3 py-2 text-sm"
+                    >
+                      <option value={10}>10 min</option>
+                      <option value={15}>15 min</option>
+                      <option value={25}>25 min</option>
+                      <option value={45}>45 min</option>
+                      <option value={60}>60 min</option>
+                    </select>
 
-                if (b.includes("error") || b.includes("bug") || b.includes("import")) {
-                  out += `\nNext step: reproduce the issue in the smallest case, then fix ONE root cause.`;
-                } else if (b.includes("time") || b.includes("late") || b.includes("tired")) {
-                  out += `\nNext step: cut scope. Pick a 10-minute version of the task and finish it.`;
-                } else if (b.includes("confus") || b.includes("not sure")) {
-                  out += `\nNext step: write 3 micro tasks (10 min each). Choose the easiest and start.`;
-                } else {
-                  out += `\nNext step: ${
-                    n ? n : "write the next action in one sentence and do it."
-                  }`;
-                }
+                    {focusRunning ? (
+                      <button
+                        onClick={stopFocus}
+                        className="ml-auto rounded-xl px-4 py-2 text-sm bg-white/5 hover:bg-white/10 border border-white/10"
+                      >
+                        Stop
+                      </button>
+                    ) : (
+                      <button
+                        onClick={startFocus}
+                        disabled={!stepText.trim()}
+                        className="ml-auto rounded-xl px-4 py-2 text-sm bg-zinc-100 text-zinc-900 disabled:opacity-50"
+                      >
+                        Start focus
+                      </button>
+                    )}
+                  </div>
 
-                out += `\n\nRule: one action → done → then decide the next.`;
-                setNovaSuggestion(out);
-              }}
-              novaSuggestion={novaSuggestion}
-              onSaveDebrief={() => {
-                const key = "nova_focus_debrief_v1";
-                const existing = JSON.parse(localStorage.getItem(key) || "[]");
-                existing.unshift({
-                  ts: new Date().toISOString(),
-                  direction: d?.title || "",
-                  step: stepText,
-                  minutes: stepMin,
-                  ...debrief,
-                  novaSuggestion,
-                });
-                localStorage.setItem(key, JSON.stringify(existing.slice(0, 100)));
-              }}
-            />
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={saveTodayStepUI}
+                      disabled={saving || !stepText.trim()}
+                      className="rounded-xl px-4 py-2 text-sm bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-50"
+                    >
+                      Save step
+                    </button>
+
+                    <button
+                      onClick={markDone}
+                      disabled={saving || done || !stepText.trim()}
+                      className="rounded-xl px-4 py-2 text-sm bg-zinc-100 text-zinc-900 disabled:opacity-50"
+                      title="Marks today done and records +1 progress (once/day)"
+                    >
+                      Mark done
+                    </button>
+                  </div>
+
+                  {focusMsg && (
+                    <div className="text-xs text-zinc-400 mt-2">{focusMsg}</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Focus Companion */}
+              <FocusCompanion
+                isRunning={focusRunning}
+                timeLeftLabel={focusRunning ? formatMs(focusLeftMs) : undefined}
+                directionTitle={d?.title}
+                stepText={stepText}
+                focusDone={focusDone && !focusRunning}
+                debrief={debrief}
+                setDebrief={setDebrief}
+                onAskNova={askNovaLocal}
+                novaSuggestion={novaSuggestion}
+                onSaveDebrief={saveDebriefLocal}
+              />
+            </div>
           </div>
         </div>
       </div>
