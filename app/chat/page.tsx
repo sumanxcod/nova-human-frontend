@@ -1,10 +1,10 @@
 import { Suspense } from "react";
-import HabitsNewClient from "./HabitsNewClient";
+import ChatClient from "../components/ChatClient";
 
-export default function Page() {
+export default function ChatPage() {
   return (
     <Suspense fallback={<div style={{ padding: 16 }}>Loading…</div>}>
-      <HabitsNewClient />
+      <ChatClient />
     </Suspense>
   );
 }

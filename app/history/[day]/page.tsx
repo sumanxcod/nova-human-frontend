@@ -46,16 +46,17 @@ export default function HistoryDayPage({ params }: { params: { day: string } }) 
                 "max-w-[85%] rounded-2xl px-4 py-3 text-sm whitespace-pre-wrap",
                 m.role === "user"
                   ? "bg-blue-600 text-white"
-                  : "bg-white/5 border border-white/10 text-zinc-100",
+                  : "bg-gradient-to-r from-amber-400/80 to-amber-300/80 text-zinc-900 hover:bg-amber-400/90",
+                  "hover:opacity-95"
               ].join(" ")}
             >
               {m.content}
             </div>
           </div>
         ))}
-
+          text-zinc-100
         {messages.length === 0 && !err && (
-          <div className="text-sm text-zinc-400">No messages for this day.</div>
+          <div className="text-sm text-emerald-300/80 line-through">No messages for this day.</div>
         )}
       </div>
     </div>

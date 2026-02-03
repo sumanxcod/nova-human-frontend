@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import ChatClient from "./components/ChatClient";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return (
-    <Suspense fallback={<div style={{ padding: 16 }}>Loading…</div>}>
-      <ChatClient />
-    </Suspense>
-  );
+  redirect("/chat");
 }

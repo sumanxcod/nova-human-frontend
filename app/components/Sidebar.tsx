@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "../lib/api";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type SessionItem = {
   sid: string;
@@ -13,28 +13,12 @@ type SessionItem = {
   count: number;
 };
 
-function NavLink({ href, label }: { href: string; label: string }) {
-  return (
-    <a
-      href={href}
-      className="rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
-    >
-      {label}
-    </a>
-  );
-}
-
-function newSid() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
-  return `chat_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
 export default function Sidebar() {
   const [items, setItems] = useState<SessionItem[]>([]);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [modal, setModal] = useState<"about" | "privacy" | null>(null);
 
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeSid = searchParams.get("sid") || "";
 
@@ -54,7 +38,8 @@ export default function Sidebar() {
         updated_at: typeof s?.updated_at === "string" ? s.updated_at : "",
         count: Number.isFinite(Number(s?.count)) ? Number(s.count) : 0,
       }))
-      .filter((s) => s.sid.length > 0);
+      .filter((s) => s.sid.length > 0)
+      .filter((s) => s.count > 0 || s.last.trim().length > 0);
 
     setItems(normalized);
   } catch {
@@ -83,9 +68,7 @@ export default function Sidebar() {
       setOpenMenu(null);
 
       if (activeSid === sid) {
-        const newOne = newSid();
-        const base = pathname === "/chat" ? "/chat" : "/";
-        router.replace(`${base}?sid=${encodeURIComponent(newOne)}`);
+        router.replace("/chat");
       }
     } catch {
       alert("Couldn't delete. Is the backend running?");
@@ -108,8 +91,7 @@ export default function Sidebar() {
     const nav = document.getElementById("nav") as HTMLInputElement | null;
     if (nav) nav.checked = false;
 
-    const base = pathname === "/chat" ? "/chat" : "/";
-    router.replace(`${base}?sid=${encodeURIComponent(sid)}`);
+    router.replace(`/chat?sid=${encodeURIComponent(sid)}`);
   }
 
   return (
@@ -121,9 +103,19 @@ export default function Sidebar() {
 
         <button
           onClick={() => {
-            const sid = newSid();
-            const base = pathname === "/chat" ? "/chat" : "/";
-            goToSid(sid);
+            // Close mobile nav
+            const nav = document.getElementById("nav") as HTMLInputElement | null;
+            if (nav) nav.checked = false;
+
+            // ✅ Clear any persisted sid so nothing can auto-restore old chat
+            try {
+              localStorage.removeItem("nova_sid");
+              localStorage.removeItem("selected_chat_sid");
+              localStorage.removeItem("active_chat");
+            } catch {}
+
+            // ✅ Go to fresh chat
+            router.replace("/chat");
           }}
           className="mt-3 rounded-md bg-white/5 px-3 py-2 text-sm text-zinc-100"
         >
@@ -134,7 +126,7 @@ export default function Sidebar() {
       {/* Main nav */}
       <nav className="px-3 pb-2 flex flex-col gap-1">
         <button
-          onClick={() => goTo("/")}
+          onClick={() => goTo("/chat")}
           className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
         >
           Chat
@@ -149,7 +141,7 @@ export default function Sidebar() {
           onClick={() => goTo("/habits")}
           className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
         >
-          Habits
+          Action Plan
         </button>
         <button
           onClick={() => goTo("/checkin")}
@@ -162,6 +154,31 @@ export default function Sidebar() {
           className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
         >
           Dashboard
+        </button>
+        <button
+          onClick={() => goTo("/reflection")}
+          className="rounded-xl px-3 py-2 text-sm text-zinc-100 hover:bg-white/5"
+        >
+          Weekly Reflection
+        </button>
+      </nav>
+
+      {/* Divider */}
+      <div className="mx-3 my-2 border-t border-white/10" />
+
+      {/* Footer menu */}
+      <nav className="px-3 pb-3 flex flex-col gap-1">
+        <button
+          onClick={() => setModal("about")}
+          className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
+        >
+          About Nova Human
+        </button>
+        <button
+          onClick={() => setModal("privacy")}
+          className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
+        >
+          Privacy
         </button>
       </nav>
 
@@ -223,6 +240,71 @@ export default function Sidebar() {
           );
         })}
       </div>
+
+      {/* Modal backdrop */}
+      {modal && (
+        <div
+          className="fixed inset-0 bg-black/60 z-40"
+          onClick={() => setModal(null)}
+        />
+      )}
+
+      {/* Modal: slides up from bottom */}
+      {modal && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-white/10 rounded-t-2xl max-h-[80vh] overflow-y-auto flex flex-col">
+          <div className="flex-1 px-6 py-6">
+            {modal === "about" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-zinc-100">🧠 About Nova Human</h2>
+                <div className="text-sm text-zinc-300 leading-relaxed space-y-3">
+                  <p>
+                    Nova Human is an AI life-partner designed to help people think clearly,
+                    take action, and move forward one step at a time.
+                  </p>
+                  <p>
+                    It is not a chatbot and not therapy.
+                    Nova focuses on direction, planning, and daily progress through calm,
+                    human guidance.
+                  </p>
+                  <p>
+                    Nova Human was created by Suman Singh Dhami
+                    as an independent project focused on human-centered decision making.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {modal === "privacy" && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-zinc-100">🔒 Privacy</h2>
+                <div className="text-sm text-zinc-300 leading-relaxed space-y-3">
+                  <p>
+                    Your conversations are stored to maintain continuity and context.
+                  </p>
+                  <p>
+                    Your data is not sold or shared with third parties.
+                    There is no advertising and no data brokerage.
+                  </p>
+                  <p>
+                    You can delete chats at any time.
+                    Nova Human is designed to minimize data usage
+                    and respect user privacy.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="shrink-0 border-t border-white/10 px-6 py-4">
+            <button
+              onClick={() => setModal(null)}
+              className="w-full rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-white/15"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

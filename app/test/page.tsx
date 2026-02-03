@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from ".././lib/api";
+import "./page.css";
 
 export default function TestPage() {
   const [health, setHealth] = useState<any>(null);
@@ -24,16 +25,16 @@ export default function TestPage() {
   }
 
   return (
-    <div style={{ padding: 20 }}>
+    <div className="container">
       <h1>Nova Human API Test</h1>
       <pre>{JSON.stringify(health, null, 2)}</pre>
 
-      <button onClick={send} style={{ padding: 10, marginTop: 10 }}>
+      <button type="button" onClick={send} className="send-button">
         Send Chat Test
       </button>
 
-      {err && <pre style={{ marginTop: 10 }}>{err}</pre>}
-      <pre style={{ marginTop: 10 }}>{JSON.stringify(reply, null, 2)}</pre>
+      {err && <pre className="error">{err}</pre>}
+      <pre className="reply">{JSON.stringify(reply, null, 2)}</pre>
     </div>
   );
 }

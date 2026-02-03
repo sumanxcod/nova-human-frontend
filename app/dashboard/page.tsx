@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { generateInsights } from "../lib/insights";
 // ---- types ----
-type Habit = {
+type ActionTask = {
   id: string;
   name: string;
   days: Record<string, number>;
@@ -17,7 +17,7 @@ type MoodEntry = {
 };
 
 // ---- storage keys ----
-const HABITS_KEY = "nova_habits_v1";
+const ACTION_PLAN_KEY = "nova_habits_v1";
 const MOOD_KEY = "nova_mood_v1";
 
 // ---- helpers ----
@@ -56,18 +56,18 @@ const MOOD_COLOR: Record<Mood, string> = {
 
 // ---- page ----
 export default function DashboardPage() {
-  const [habits, setHabits] = useState<Habit[]>([]);
+  const [actionPlan, setActionPlan] = useState<ActionTask[]>([]);
   const [moods, setMoods] = useState<MoodEntry[]>([]);
 
   const today = todayKey();
 
   useEffect(() => {
-    setHabits(loadJSON<Habit>(HABITS_KEY));
+    setActionPlan(loadJSON<ActionTask>(ACTION_PLAN_KEY));
     setMoods(loadJSON<MoodEntry>(MOOD_KEY));
   }, []);
 
   // ---- computed ----
-  const habitsDoneToday = habits.filter((h) => (h.days[today] ?? 0) > 0).length;
+  const tasksDoneToday = actionPlan.filter((h) => (h.days[today] ?? 0) > 0).length;
   const todayMood = moods.find((m) => m.date === today)?.mood;
 
   const days14 = useMemo(() => lastNDays(14), []);
@@ -84,21 +84,21 @@ export default function DashboardPage() {
   }, [moods]);
 
   // ✅ THIS WAS MISSING IN YOUR CODE:
-  const insights = useMemo(() => generateInsights(habits, moods), [habits, moods]);
+  const insights = useMemo(() => generateInsights(actionPlan, moods), [actionPlan, moods]);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="max-w-6xl mx-auto px-4 py-10">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
         <p className="text-sm text-zinc-400 mt-1">
-          Overview of your habits and mood
+          Overview of your Action Plan and mood
         </p>
 
         {/* Today summary */}
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card title="Habits today">
+          <Card title="Action Plan today">
             <div className="text-3xl font-semibold">
-              {habitsDoneToday}/{habits.length || 0}
+              {tasksDoneToday}/{actionPlan.length || 0}
             </div>
             <div className="text-xs text-zinc-400 mt-1">completed</div>
           </Card>
@@ -116,7 +116,7 @@ export default function DashboardPage() {
 
           <Card title="Today’s focus">
             <div className="text-sm text-zinc-300">
-              Do one tiny habit and one honest checkin. Consistency beats intensity.
+              Do one tiny week task and one honest checkin. Consistency beats intensity.
             </div>
           </Card>
         </div>
@@ -155,18 +155,18 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Habit mini heatmap */}
+        {/* Action Plan mini heatmap */}
         <div className="mt-10">
           <h2 className="text-lg font-medium mb-3">
-            Habit activity (last 14 days)
+            Action Plan activity (last 14 days)
           </h2>
           <div className="grid grid-cols-14 gap-1">
             {days14.map((d) => {
-              const count = habits.filter((h) => (h.days[d] ?? 0) > 0).length;
+              const count = actionPlan.filter((A) => (A.days[d] ?? 0) > 0).length;
               return (
                 <div
                   key={d}
-                  title={`${d} • ${count} habits`}
+                  title={`${d} • ${count} milestones`}
                   className={`h-3 w-3 rounded border ${
                     count
                       ? "bg-emerald-500/70 border-emerald-500/30"

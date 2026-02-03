@@ -1,4 +1,4 @@
-type Habit = { id: string; name: string; days: Record<string, number> };
+type ActionPlan = { id: string; name: string; days: Record<string, number> };
 type Mood = "happy" | "neutral" | "anxious" | "angry" | "sad";
 type MoodEntry = { date: string; mood: Mood };
 
@@ -12,8 +12,8 @@ function daysAgo(n: number) {
   return todayKey(d);
 }
 
-function countHabitsDoneOnDate(habits: Habit[], date: string) {
-  return habits.filter((h) => (h.days?.[date] ?? 0) > 0).length;
+function countActionPlanDoneOnDate(ActionPlans: ActionPlan[], date: string) {
+  return ActionPlans.filter((h) => (h.days?.[date] ?? 0) > 0).length;
 }
 
 function getMoodOnDate(moods: MoodEntry[], date: string): Mood | null {
@@ -39,13 +39,12 @@ export type Insight = {
   cta?: { label: string; messageToChat: string };
 };
 
-export function generateInsights(habits: Habit[], moods: MoodEntry[]): Insight[] {
+export function generateInsights(ActionPlans: ActionPlan[], moods: MoodEntry[]): Insight[] {
   const insights: Insight[] = [];
   const today = todayKey();
 
-  const totalHabits = habits.length;
-  const doneToday = countHabitsDoneOnDate(habits, today);
-
+  const totalActionPlan = ActionPlans.length;
+  const doneToday = countActionPlanDoneOnDate(ActionPlans, today);
   const moodToday = getMoodOnDate(moods, today);
 
   // 1) If anxious streak
@@ -59,21 +58,21 @@ export function generateInsights(habits: Habit[], moods: MoodEntry[]): Insight[]
     });
   }
 
-  // 2) Habits low today
-  if (totalHabits > 0 && doneToday === 0) {
+  // 2) Action Plan low today
+  if (totalActionPlan > 0 && doneToday === 0) {
     insights.push({
-      title: "No habits completed yet today",
-      body: "Want a 5-minute win? Pick one habit and do the smallest possible version right now.",
+      title: "No milestones completed yet today",
+      body: "Want a 5-minute win? Pick one week task and do the smallest possible version right now.",
       type: "neutral",
-      cta: { label: "Plan my next step", messageToChat: "I did 0 habits today. Give me one tiny step I can do in 5 minutes." },
+      cta: { label: "Plan my next step", messageToChat: "I did 0 week tasks today. Give me one tiny step I can do in 5 minutes." },
     });
   }
 
-  // 3) Habits strong today
-  if (totalHabits > 0 && doneToday >= Math.max(1, Math.ceil(totalHabits * 0.6))) {
+  // 3) Action Plan strong today
+  if (totalActionPlan > 0 && doneToday >= Math.max(1, Math.ceil(totalActionPlan * 0.6))) {
     insights.push({
       title: "Strong day",
-      body: `You’ve completed ${doneToday}/${totalHabits} habits today. Keep momentum—one more small action will lock the win.`,
+      body: `You’ve completed ${doneToday}/${totalActionPlan} week tasks today. Keep momentum—one more small action will lock the win.`,
       type: "good",
       cta: { label: "Ask Nova for a boost", messageToChat: "I’m doing well today. Give me one more small action to finish strong." },
     });
@@ -88,15 +87,15 @@ export function generateInsights(habits: Habit[], moods: MoodEntry[]): Insight[]
     });
   }
 
-  // 5) Mood + habits correlation (simple heuristic)
-  // Compare last 7 days: average habits on “happy” days vs “anxious/sad” days
+  // 5) Mood + Action Plan correlation (simple heuristic)
+  // Compare last 7 days: average Action Plan on “happy” days vs “anxious/sad” days
   const last7 = Array.from({ length: 7 }, (_, i) => daysAgo(i));
   const happyDays: number[] = [];
   const lowDays: number[] = [];
 
   for (const d of last7) {
     const m = getMoodOnDate(moods, d);
-    const c = countHabitsDoneOnDate(habits, d);
+    const c = countActionPlanDoneOnDate(ActionPlans, d);
     if (m === "happy") happyDays.push(c);
     if (m === "anxious" || m === "sad") lowDays.push(c);
   }
@@ -107,8 +106,8 @@ export function generateInsights(habits: Habit[], moods: MoodEntry[]): Insight[]
 
   if (happyAvg !== null && lowAvg !== null && happyAvg >= lowAvg + 1) {
     insights.push({
-      title: "Habits seem to lift your mood",
-      body: `In the last 7 days, you did more habits on “happy” days than on “anxious/sad” days. When your mood dips, a tiny habit might help.`,
+      title: "Action Plan seem to lift your mood",
+      body: `In the last 7 days, you did more Action Plan on “happy” days than on “anxious/sad” days. When your mood dips, a tiny week task might help.`,
       type: "good",
       cta: { label: "Make a rescue plan", messageToChat: "When I feel low/anxious, what is a simple rescue routine I can do in 10 minutes?" },
     });
@@ -118,7 +117,7 @@ export function generateInsights(habits: Habit[], moods: MoodEntry[]): Insight[]
   if (insights.length === 0) {
     insights.push({
       title: "You’re steady",
-      body: "Keep it simple: check in once, complete one habit, and talk when you feel stuck.",
+      body: "Keep it simple: check in once, complete one week task, and talk when you feel stuck.",
       type: "neutral",
     });
   }

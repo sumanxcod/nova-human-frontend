@@ -5,11 +5,13 @@ import { apiGet, apiPost } from "../lib/api";
 import { useRouter, useSearchParams } from "next/navigation";
 import { fetchTodayCheckin } from "../lib/checkinApi";
 import { fetchDirection } from "../lib/directionApi";
+import NovaHumanLogo from "./NovaHumanLogo";
 
 export type Msg = {
   role: "user" | "assistant";
   content: string;
   ts?: string;
+  mode?: string;
 };
 
 type DirectionResponse = {
@@ -18,6 +20,11 @@ type DirectionResponse = {
     title?: string;
   };
 };
+
+// ✅ Generate unique session ID
+function generateSessionId(): string {
+  return `nova_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
 
 type CheckinResponse = {
   tone?: string;
@@ -111,11 +118,6 @@ Rules:
 - When direction context exists, align advice with it.
 `.trim();
 
-// ✅ Session helper
-function newSid() {
-  return `chat_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
 // --------------------
 // ✅ Backend-shape-safe parsers
 // --------------------
@@ -144,7 +146,13 @@ function coerceMessages(input: any): Msg[] | null {
       if (!c) return null;
 
       const ts = m?.ts ?? m?.created_at ?? null;
-      return { role, content: c, ts: ts || undefined } as Msg;
+      const mode = m?.mode ?? m?.agent?.mode ?? null;
+      return {
+        role,
+        content: c,
+        ts: ts || undefined,
+        mode: typeof mode === "string" && mode.trim() ? mode : undefined,
+      } as Msg;
     })
     .filter((m: any): m is Msg => Boolean(m && m.content && m.role)) as Msg[];
 
@@ -188,6 +196,8 @@ function extractAssistantText(res: any): string {
   return "";
 }
 
+const NEW_CHAT_EVENT = "nova:new-chat";
+
 export default function Chat() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -207,6 +217,121 @@ export default function Chat() {
 
   const didNudgeRef = useRef(false);
   const sendingRef = useRef(false);
+
+  // --------------------
+  // Voice input (Browser STT) — push-to-talk
+  // --------------------
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  // --------------------
+  // Voice output (Browser TTS)
+  // --------------------
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  function stopSpeak() {
+    if (typeof window === "undefined") return;
+    window.speechSynthesis?.cancel();
+    setIsSpeaking(false);
+  }
+
+  function speak(text: string) {
+    if (typeof window === "undefined") return;
+    if (!text?.trim()) return;
+
+    // Stop any current speech first
+    stopSpeak();
+
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.rate = 1.0;   // 0.8–1.1 is nice
+    utter.pitch = 1.0;
+    utter.volume = 1.0;
+
+    utter.onend = () => setIsSpeaking(false);
+    utter.onerror = () => setIsSpeaking(false);
+
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utter);
+  }
+
+  function getSR() {
+    if (typeof window === "undefined") return null;
+    const w = window as any;
+    return w.SpeechRecognition || w.webkitSpeechRecognition || null;
+  }
+
+  function startVoice() {
+    const SR = getSR();
+    if (!SR) {
+      alert("Voice input is not supported in this browser. Use Chrome.");
+      return;
+    }
+
+    // Always create fresh recognition to avoid duplicates
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      recognitionRef.current = null;
+    }
+
+    const rec = new SR();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.lang = "en-US";
+
+    rec.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInput((prev) => (prev ? prev + " " + transcript : transcript).trim());
+    };
+
+    rec.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    rec.onerror = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = rec;
+
+    try {
+      rec.start();
+      setIsListening(true);
+    } catch (e) {
+      setIsListening(false);
+      recognitionRef.current = null;
+    }
+  }
+
+  function stopVoice() {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {}
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+  }
+
+  function toggleVoice() {
+    if (isListening) {
+      stopVoice();
+    } else {
+      startVoice();
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      try {
+        recognitionRef.current?.stop?.();
+      } catch {}
+      stopSpeak();
+    };
+  }, []);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -232,7 +357,12 @@ export default function Chat() {
   // ✅ Load chat history with retry (sid-based)
   // --------------------
   useEffect(() => {
-    if (!sid) return;
+    if (!sid) {
+      // ✅ No sid = fresh empty state
+      setMessages([]);
+      setErr(null);
+      return;
+    }
 
     let cancelled = false;
 
@@ -321,13 +451,7 @@ export default function Chat() {
     setLoading(true);
     setErr(null);
 
-    let effectiveSid = sid;
-
-    // ✅ create session ONLY when user sends first message
-    if (!effectiveSid) {
-      effectiveSid = newSid();
-      router.replace(`/?sid=${encodeURIComponent(effectiveSid)}`);
-    }
+    const effectiveSid = sid || "";
 
     // Optimistic UI
     setMessages((prev) => [...prev, { role: "user", content: text }]);
@@ -336,12 +460,26 @@ export default function Chat() {
       const category = detectCategory(text);
       const contract = responseContract(category);
 
-      const res: any = await apiPost("/memory/chat", {
-        sid: effectiveSid,
+      const payload: any = {
         message: text,
         system: NOVA_SYSTEM + "\n\n" + contract,
         context: { direction, todayAction, tone, category },
-      });
+      };
+      
+      // ✅ Explicitly set sid in payload:
+      // - If we have a sid (continuing conversation), use it
+      // - If we DON'T have a sid (new chat), generate a NEW unique one to force backend to create new session
+      payload.sid = effectiveSid || generateSessionId();
+
+      const res: any = await apiPost("/memory/chat", payload);
+
+      if (!sid) {
+        const responseSid =
+          res?.sid ?? res?.session?.sid ?? res?.data?.sid ?? res?.chat?.sid ?? "";
+        if (typeof responseSid === "string" && responseSid.trim()) {
+          router.replace(`/chat?sid=${encodeURIComponent(responseSid)}`);
+        }
+      }
 
       const full = coerceMessages(res);
       if (full?.length) {
@@ -388,13 +526,6 @@ export default function Chat() {
     }
   }
 
-  function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      send();
-    }
-  }
-
   async function clearChat() {
     try {
       if (!sid) return;
@@ -406,7 +537,27 @@ export default function Chat() {
       setErr(e?.message || "Couldn’t clear backend memory.");
     }
   }
+  function startNewChat() {
+    // 1) Clear runtime state
+    setMessages([]);
+    setInput("");
+    setErr(null);
+    didNudgeRef.current = false;
 
+    // 2) Clear voice states
+    stopSpeak();
+    stopVoice();
+
+    // 3) Clear persisted sid
+    try {
+      localStorage.removeItem("nova_sid");
+      localStorage.removeItem("selected_chat_sid");
+      localStorage.removeItem("active_chat");
+    } catch {}
+
+    // 4) Clear URL sid
+    router.replace("/chat");
+  }
   return (
     <div className="flex flex-col h-full">
       <header className="shrink-0 border-b border-white/10 bg-black/40 backdrop-blur">
@@ -436,8 +587,17 @@ export default function Chat() {
             </div>
           )}
 
-          <div className="text-sm text-zinc-400">
-            Days left <span className="text-zinc-200 font-medium">30</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={startNewChat}
+              className="rounded-xl px-3 py-2 text-sm font-medium bg-white/5 border border-white/10 text-zinc-100 hover:bg-white/10"
+            >
+              + New chat
+            </button>
+
+            <div className="text-sm text-zinc-400">
+              Days left <span className="text-zinc-200 font-medium">30</span>
+            </div>
           </div>
         </div>
       </header>
@@ -454,8 +614,16 @@ export default function Chat() {
       >
         <div className="max-w-2xl mx-auto px-4 py-6 space-y-2">
           {messages.length === 0 && !loading && (
-            <div className="mt-24 text-center text-sm text-zinc-400">
-              Say the problem you’re avoiding. We’ll work from there.
+            <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+              <NovaHumanLogo size={90} />
+
+              <div className="text-lg font-semibold text-zinc-100">
+                How can I help you today?
+              </div>
+
+              <div className="text-sm text-zinc-400 max-w-sm">
+                You can ask anything — career, money, decisions, or what to do next.
+              </div>
             </div>
           )}
 
@@ -511,6 +679,11 @@ export default function Chat() {
                           : "bg-white/5 text-zinc-100 border border-white/10",
                       ].join(" ")}
                     >
+                      {!isUser && m.mode && (
+                        <div className="mb-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-medium text-zinc-300">
+                          {m.mode.toUpperCase()}
+                        </div>
+                      )}
                       {m.content}
                     </div>
                   </div>
@@ -574,26 +747,114 @@ export default function Chat() {
             </div>
           )}
 
-          <div className="flex gap-2 items-end">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder="Stuck? Talk it through… (Enter to send, Shift+Enter for a new line)"
-              className="flex-1 resize-none rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-[16px] outline-none focus:border-white/20 min-h-[48px] max-h-40"
-            />
-            <button
-              onClick={send}
-              disabled={loading || sendingRef.current || !input.trim()}
-              className="rounded-2xl px-4 py-3 text-sm font-medium bg-zinc-100 text-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Send
-            </button>
-          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center rounded-2xl border border-white/10 bg-white/5 px-4 py-3 gap-2">
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                placeholder="Type your message…"
+                className="flex-1 bg-transparent text-[16px] text-zinc-100 placeholder:text-zinc-500 outline-none"
+              />
 
-          <div className="mt-2 text-[11px] text-zinc-500">
-            Session:{" "}
-            <span className="text-zinc-300">{sid ? sid : "not created yet"}</span>
+              {input.trim() && (
+                <button
+                  onClick={send}
+                  disabled={loading}
+                  className="h-8 w-8 rounded-lg text-zinc-100 hover:bg-white/10 disabled:opacity-50 flex items-center justify-center shrink-0"
+                  title="Send"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M5 12h13M13 6l6 6-6 6"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={toggleVoice}
+              className={`h-11 w-11 rounded-2xl border border-white/10 flex items-center justify-center ${
+                isListening ? "bg-amber-300 text-zinc-900" : "bg-white/10 text-zinc-100 hover:bg-white/15"
+              }`}
+              title={isListening ? "Click to stop" : "Click to talk"}
+            >
+              {/* Mic icon */}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M19 11a7 7 0 0 1-14 0"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M12 18v3"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                // Speak the most recent assistant message
+                const last = [...messages].reverse().find((m) => m.role === "assistant");
+                if (!last?.content) return;
+                if (isSpeaking) stopSpeak();
+                else speak(last.content);
+              }}
+              className={`h-11 w-11 rounded-2xl border border-white/10 flex items-center justify-center ${
+                isSpeaking ? "bg-amber-300 text-zinc-900" : "bg-white/10 text-zinc-100 hover:bg-white/15"
+              }`}
+              title={isSpeaking ? "Stop" : "Speak last reply"}
+            >
+              {/* Speaker icon */}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M11 5 6 9H3v6h3l5 4V5Z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M15 9a3 3 0 0 1 0 6"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M17.5 6.5a6 6 0 0 1 0 11"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
           </div>
 
           {/* <button onClick={clearChat} className="mt-2 text-xs underline text-zinc-400">Clear chat</button> */}

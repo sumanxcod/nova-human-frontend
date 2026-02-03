@@ -8,7 +8,26 @@ import MobileTabs from "./components/MobileTabs";
 
 export const metadata: Metadata = {
   title: "Nova Human",
-  description: "Nova Human — chat-first personal OS",
+  description: "AI life-partner / thinking agent",
+  manifest: "/manifest.webmanifest",
+  themeColor: "#0a0a0a",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Nova Human",
+  },
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/icon-192.png",
+  },
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -20,11 +39,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <SidebarClient />
           </Suspense>
 
-          <main className="flex-1 flex flex-col overflow-hidden w-full">
-            <div className="flex-1 overflow-hidden pb-16 md:pb-0">
-              {children}
-            </div>
-           </main>
+         <main className="flex-1 flex flex-col min-h-0 w-full">
+         <div className="flex-1 min-h-0 overflow-y-auto pb-16 md:pb-0">
+         {children}
+       </div>
+       </main>
+
 
           <MobileTabs />
         </MobileShell>

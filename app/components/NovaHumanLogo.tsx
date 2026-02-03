@@ -1,0 +1,114 @@
+import React from "react";
+
+export default function NovaHumanLogo({
+  size = 200,
+  className = "",
+}: {
+  size?: number;
+  className?: string;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 200 200"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+    >
+      <defs>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+          <feMerge>
+            <feMergeNode in="coloredBlur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+
+        <radialGradient id="centerGlow">
+          <stop offset="0%" stopColor="#6dd5ff" stopOpacity="1" />
+          <stop offset="50%" stopColor="#2196F3" stopOpacity="0.8" />
+          <stop offset="100%" stopColor="#1976D2" stopOpacity="0.6" />
+        </radialGradient>
+
+        <linearGradient id="lineGradient">
+          <stop offset="0%" stopColor="#6dd5ff" stopOpacity="0.8" />
+          <stop offset="100%" stopColor="#2196F3" stopOpacity="1" />
+        </linearGradient>
+      </defs>
+
+      {/* Center glowing core */}
+      <circle cx="100" cy="100" r="15" fill="url(#centerGlow)" filter="url(#glow)" />
+      <circle cx="100" cy="100" r="10" fill="#6dd5ff" opacity="0.9" />
+
+      {/* Inner ring of nodes and connections */}
+      <g filter="url(#glow)">
+        <line x1="100" y1="100" x2="100" y2="50" stroke="url(#lineGradient)" strokeWidth="2" opacity="0.7" />
+        <circle cx="100" cy="50" r="6" fill="#2196F3" />
+        <circle cx="100" cy="50" r="4" fill="#6dd5ff" />
+
+        <line x1="100" y1="100" x2="135.4" y2="64.6" stroke="url(#lineGradient)" strokeWidth="2" opacity="0.7" />
+        <circle cx="135.4" cy="64.6" r="6" fill="#2196F3" />
+        <circle cx="135.4" cy="64.6" r="4" fill="#6dd5ff" />
+
+        <line x1="100" y1="100" x2="150" y2="100" stroke="url(#lineGradient)" strokeWidth="2" opacity="0.7" />
+        <circle cx="150" cy="100" r="6" fill="#2196F3" />
+        <circle cx="150" cy="100" r="4" fill="#6dd5ff" />
+
+        <line x1="100" y1="100" x2="135.4" y2="135.4" stroke="url(#lineGradient)" strokeWidth="2" opacity="0.7" />
+        <circle cx="135.4" cy="135.4" r="6" fill="#2196F3" />
+        <circle cx="135.4" cy="135.4" r="4" fill="#6dd5ff" />
+
+        <line x1="100" y1="100" x2="100" y2="150" stroke="url(#lineGradient)" strokeWidth="2" opacity="0.7" />
+        <circle cx="100" cy="150" r="6" fill="#2196F3" />
+        <circle cx="100" cy="150" r="4" fill="#6dd5ff" />
+
+        <line x1="100" y1="100" x2="64.6" y2="135.4" stroke="url(#lineGradient)" strokeWidth="2" opacity="0.7" />
+        <circle cx="64.6" cy="135.4" r="6" fill="#2196F3" />
+        <circle cx="64.6" cy="135.4" r="4" fill="#6dd5ff" />
+
+        <line x1="100" y1="100" x2="50" y2="100" stroke="url(#lineGradient)" strokeWidth="2" opacity="0.7" />
+        <circle cx="50" cy="100" r="6" fill="#2196F3" />
+        <circle cx="50" cy="100" r="4" fill="#6dd5ff" />
+
+        <line x1="100" y1="100" x2="64.6" y2="64.6" stroke="url(#lineGradient)" strokeWidth="2" opacity="0.7" />
+        <circle cx="64.6" cy="64.6" r="6" fill="#2196F3" />
+        <circle cx="64.6" cy="64.6" r="4" fill="#6dd5ff" />
+      </g>
+
+      {/* Outer ring of nodes */}
+      <g filter="url(#glow)">
+        <line x1="100" y1="50" x2="100" y2="25" stroke="url(#lineGradient)" strokeWidth="1.5" opacity="0.6" />
+        <rect x="95" y="20" width="10" height="10" rx="2" fill="#2196F3" />
+        <rect x="97" y="22" width="6" height="6" rx="1" fill="#6dd5ff" />
+
+        <line x1="135.4" y1="64.6" x2="156.1" y2="43.9" stroke="url(#lineGradient)" strokeWidth="1.5" opacity="0.6" />
+        <rect x="151.1" y="38.9" width="10" height="10" rx="2" fill="#2196F3" />
+        <rect x="153.1" y="40.9" width="6" height="6" rx="1" fill="#6dd5ff" />
+
+        <line x1="150" y1="100" x2="175" y2="100" stroke="url(#lineGradient)" strokeWidth="1.5" opacity="0.6" />
+        <rect x="170" y="95" width="10" height="10" rx="2" fill="#2196F3" />
+        <rect x="172" y="97" width="6" height="6" rx="1" fill="#6dd5ff" />
+
+        <line x1="135.4" y1="135.4" x2="156.1" y2="156.1" stroke="url(#lineGradient)" strokeWidth="1.5" opacity="0.6" />
+        <rect x="151.1" y="151.1" width="10" height="10" rx="2" fill="#2196F3" />
+        <rect x="153.1" y="153.1" width="6" height="6" rx="1" fill="#6dd5ff" />
+
+        <line x1="100" y1="150" x2="100" y2="175" stroke="url(#lineGradient)" strokeWidth="1.5" opacity="0.6" />
+        <rect x="95" y="170" width="10" height="10" rx="2" fill="#2196F3" />
+        <rect x="97" y="172" width="6" height="6" rx="1" fill="#6dd5ff" />
+
+        <line x1="64.6" y1="135.4" x2="43.9" y2="156.1" stroke="url(#lineGradient)" strokeWidth="1.5" opacity="0.6" />
+        <rect x="38.9" y="151.1" width="10" height="10" rx="2" fill="#2196F3" />
+        <rect x="40.9" y="153.1" width="6" height="6" rx="1" fill="#6dd5ff" />
+
+        <line x1="50" y1="100" x2="25" y2="100" stroke="url(#lineGradient)" strokeWidth="1.5" opacity="0.6" />
+        <rect x="20" y="95" width="10" height="10" rx="2" fill="#2196F3" />
+        <rect x="22" y="97" width="6" height="6" rx="1" fill="#6dd5ff" />
+
+        <line x1="64.6" y1="64.6" x2="43.9" y2="43.9" stroke="url(#lineGradient)" strokeWidth="1.5" opacity="0.6" />
+        <rect x="38.9" y="38.9" width="10" height="10" rx="2" fill="#2196F3" />
+        <rect x="40.9" y="40.9" width="6" height="6" rx="1" fill="#6dd5ff" />
+      </g>
+    </svg>
+  );
+}
