@@ -1,0 +1,16 @@
+/* Local styles for /test (kept minimal to avoid build issues) */
+
+:root {
+  color-scheme: dark;
+}
+
+.test-wrap {
+  padding: 24px;
+}
+
+.test-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 16px;
+}
