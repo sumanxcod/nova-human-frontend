@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "../lib/api";
 import { useRouter, useSearchParams } from "next/navigation";
+import { usePWAInstall } from "@/app/lib/usePWAInstall";
 
 type SessionItem = {
   sid: string;
@@ -21,6 +22,8 @@ export default function Sidebar() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeSid = searchParams.get("sid") || "";
+  
+  const { canInstall, install, showIOSHint } = usePWAInstall();
 
   async function loadSessions() {
   try {
@@ -101,26 +104,28 @@ export default function Sidebar() {
       <div className="p-5">
         <div className="text-xl font-semibold">Nova Human</div>
 
-        <button
-          onClick={() => {
-            // Close mobile nav
-            const nav = document.getElementById("nav") as HTMLInputElement | null;
-            if (nav) nav.checked = false;
+        <div className="hidden md:block">
+          <button
+            onClick={() => {
+              // Close mobile nav
+              const nav = document.getElementById("nav") as HTMLInputElement | null;
+              if (nav) nav.checked = false;
 
-            // ✅ Clear any persisted sid so nothing can auto-restore old chat
-            try {
-              localStorage.removeItem("nova_sid");
-              localStorage.removeItem("selected_chat_sid");
-              localStorage.removeItem("active_chat");
-            } catch {}
+              // ✅ Clear any persisted sid so nothing can auto-restore old chat
+              try {
+                localStorage.removeItem("nova_sid");
+                localStorage.removeItem("selected_chat_sid");
+                localStorage.removeItem("active_chat");
+              } catch {}
 
-            // ✅ Go to fresh chat
-            router.replace("/chat");
-          }}
-          className="mt-3 rounded-md bg-white/5 px-3 py-2 text-sm text-zinc-100"
-        >
-          + New chat
-        </button>
+              // ✅ Go to fresh chat
+              router.replace("/chat");
+            }}
+            className="mt-3 rounded-md bg-white/5 px-3 py-2 text-sm text-zinc-100"
+          >
+            + New chat
+          </button>
+        </div>
       </div>
 
       {/* Main nav */}
@@ -295,7 +300,22 @@ export default function Sidebar() {
             )}
           </div>
 
-          <div className="shrink-0 border-t border-white/10 px-6 py-4">
+          <div className="shrink-0 border-t border-white/10 px-6 py-4 space-y-3">
+            {canInstall && (
+              <button
+                onClick={install}
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-100 hover:bg-white/10"
+              >
+                Install Nova Human
+              </button>
+            )}
+
+            {showIOSHint && (
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-300">
+                iPhone: Share → Add to Home Screen
+              </div>
+            )}
+
             <button
               onClick={() => setModal(null)}
               className="w-full rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-zinc-100 hover:bg-white/15"
