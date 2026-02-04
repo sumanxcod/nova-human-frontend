@@ -588,13 +588,14 @@ export default function Chat() {
           )}
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={startNewChat}
-              className="rounded-xl px-3 py-2 text-sm font-medium bg-white/5 border border-white/10 text-zinc-100 hover:bg-white/10"
-            >
-              + New chat
-            </button>
-
+            <div className="hidden md:block">
+              <button
+                onClick={startNewChat}
+                className="rounded-xl px-3 py-2 text-sm font-medium bg-white/5 border border-white/10 text-zinc-100 hover:bg-white/10"
+              >
+                + New chat
+              </button>
+            </div>
             <div className="text-sm text-zinc-400">
               Days left <span className="text-zinc-200 font-medium">30</span>
             </div>
