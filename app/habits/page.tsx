@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import AuthGate from "../components/AuthGate";
 
 type ActionPlanV1 = {
   direction_title: string;
@@ -13,6 +14,14 @@ type ActionPlanV1 = {
 };
 
 export default function ActionPlanPage() {
+  return (
+    <AuthGate>
+      <ActionPlanPageContent />
+    </AuthGate>
+  );
+}
+
+function ActionPlanPageContent() {
   const router = useRouter();
 
   const placeholderPlan: ActionPlanV1 = useMemo(

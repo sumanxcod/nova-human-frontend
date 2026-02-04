@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import AuthGate from "../components/AuthGate";
 import { generateInsights } from "../lib/insights";
 // ---- types ----
 type ActionTask = {
@@ -56,6 +57,14 @@ const MOOD_COLOR: Record<Mood, string> = {
 
 // ---- page ----
 export default function DashboardPage() {
+  return (
+    <AuthGate>
+      <DashboardPageContent />
+    </AuthGate>
+  );
+}
+
+function DashboardPageContent() {
   const [actionPlan, setActionPlan] = useState<ActionTask[]>([]);
   const [moods, setMoods] = useState<MoodEntry[]>([]);
 

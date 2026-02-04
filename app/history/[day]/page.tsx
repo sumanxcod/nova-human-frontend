@@ -1,31 +1,42 @@
 "use client";
 
-
 import { useEffect, useState } from "react";
 import { apiGet } from "./../../lib/api";
 
 type Msg = { role: "user" | "assistant"; content: string; ts?: string };
 
-export default function HistoryDayPage({ params }: { params: { day: string } }) {
+type Props = {
+  params: Promise<{ day: string }>;
+};
+
+export default async function HistoryDayPage({ params }: Props) {
+  const { day } = await params;
+  
+  return (
+    <HistoryDayContent day={day} />
+  );
+}
+
+function HistoryDayContent({ day }: { day: string }) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const data = await apiGet<Msg[]>(`/memory/history/${params.day}`);
+        const data = await apiGet<Msg[]>(`/memory/history/${day}`);
         setMessages(Array.isArray(data) ? data : []);
       } catch {
-        setErr("Couldn’t load day history.");
+        setErr("Couldn't load day history.");
       }
     })();
-  }, [params.day]);
+  }, [day]);
 
   return (
     <div className="h-full overflow-hidden flex flex-col">
       <div className="shrink-0 px-6 py-4 border-b border-white/10 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold">{params.day}</h1>
+          <h1 className="text-lg font-semibold">{day}</h1>
           <p className="text-xs text-zinc-400 mt-1">Read-only history</p>
         </div>
         <a href="/history" className="text-sm text-zinc-300 hover:underline">
@@ -54,7 +65,6 @@ export default function HistoryDayPage({ params }: { params: { day: string } }) 
             </div>
           </div>
         ))}
-          text-zinc-100
         {messages.length === 0 && !err && (
           <div className="text-sm text-emerald-300/80 line-through">No messages for this day.</div>
         )}

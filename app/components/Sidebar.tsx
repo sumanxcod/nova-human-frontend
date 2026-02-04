@@ -27,9 +27,11 @@ export default function Sidebar() {
 
   async function loadSessions() {
   try {
-    // wake backend cheaply
-    await apiGet("/health");
+    // ✅ Check if user has token
+    const token = typeof window !== "undefined" ? localStorage.getItem("nh_token") : null;
+    if (!token) return;
 
+    await apiGet("/health");
     const data: any = await apiGet("/memory/sessions");
     const raw = (data?.items ?? data?.sessions ?? []) as any[];
 
@@ -45,9 +47,8 @@ export default function Sidebar() {
       .filter((s) => s.count > 0 || s.last.trim().length > 0);
 
     setItems(normalized);
-  } catch {
-    // Don’t wipe to empty every time; keep last known list
-    // setItems([]);  <-- remove this
+  } catch (err: any) {
+    if (err?.message?.includes("401") || err?.message?.includes("Unauthorized")) return;
   }
 }
 
@@ -130,6 +131,26 @@ export default function Sidebar() {
 
       {/* Main nav */}
       <nav className="px-3 pb-2 flex flex-col gap-1">
+        <button
+          onClick={() => {
+            // Close mobile nav
+            const nav = document.getElementById("nav") as HTMLInputElement | null;
+            if (nav) nav.checked = false;
+
+            // ✅ Clear any persisted sid so nothing can auto-restore old chat
+            try {
+              localStorage.removeItem("nova_sid");
+              localStorage.removeItem("selected_chat_sid");
+              localStorage.removeItem("active_chat");
+            } catch {}
+
+            // ✅ Go to fresh chat
+            router.replace("/chat");
+          }}
+          className="md:hidden text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100 font-medium"
+        >
+          + New chat
+        </button>
         <button
           onClick={() => goTo("/chat")}
           className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import AuthGate from "../components/AuthGate";
 import {
   fetchDirection,
   saveDirectionDraft,
@@ -282,6 +283,14 @@ function getLastDebriefNext() {
 }
 
 export default function DirectionPage() {
+  return (
+    <AuthGate>
+      <DirectionPageContent />
+    </AuthGate>
+  );
+}
+
+function DirectionPageContent() {
   const router = useRouter();
 
   const [d, setD] = useState<Direction | null>(null);

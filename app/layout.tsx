@@ -10,7 +10,6 @@ export const metadata: Metadata = {
   title: "Nova Human",
   description: "AI life-partner / thinking agent",
   manifest: "/manifest.webmanifest",
-  themeColor: "#0a0a0a",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -23,6 +22,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport = {
+  themeColor: "#0a0a0a",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -33,7 +33,7 @@ export const viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="text-zinc-100">
+      <body className="text-zinc-100" suppressHydrationWarning>
         <MobileShell>
           <Suspense fallback={null}>
             <SidebarClient />

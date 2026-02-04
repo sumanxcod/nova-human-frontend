@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import AuthGate from "../components/AuthGate";
 
 type WeeklyItem = {
   id: number;
@@ -32,6 +33,14 @@ function apiBase() {
 }
 
 export default function WeeklyReflectionPage() {
+  return (
+    <AuthGate>
+      <WeeklyReflectionPageContent />
+    </AuthGate>
+  );
+}
+
+function WeeklyReflectionPageContent() {
   const API = useMemo(() => apiBase(), []);
   const [sid] = useState("default");
 

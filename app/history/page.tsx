@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiGet } from "./../lib/api";
+import AuthGate from "../components/AuthGate";
 
 type HistoryItem = {
   id: string;        // YYYY-MM-DD
@@ -12,6 +13,14 @@ type HistoryItem = {
 };
 
 export default function HistoryPage() {
+  return (
+    <AuthGate>
+      <HistoryPageContent />
+    </AuthGate>
+  );
+}
+
+function HistoryPageContent() {
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [err, setErr] = useState<string | null>(null);
 

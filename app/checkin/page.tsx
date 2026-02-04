@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "../lib/api";
+import AuthGate from "../components/AuthGate";
 
 /* ------------------ Types ------------------ */
 type TodayResp = {
@@ -18,6 +19,14 @@ type TodayResp = {
 
 /* ------------------ Component ------------------ */
 export default function CheckInPage() {
+  return (
+    <AuthGate>
+      <CheckInPageContent />
+    </AuthGate>
+  );
+}
+
+function CheckInPageContent() {
   const [data, setData] = useState<TodayResp | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
