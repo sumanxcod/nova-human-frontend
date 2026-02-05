@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiPost, apiGet, API_BASE } from "../lib/api";
 
 export default function SignupPage() {
+  console.log("API_BASE_DEBUG", process.env.NEXT_PUBLIC_API_BASE_URL);
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
