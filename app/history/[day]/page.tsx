@@ -24,7 +24,7 @@ function HistoryDayContent({ day }: { day: string }) {
   useEffect(() => {
     (async () => {
       try {
-        const data = await apiGet<Msg[]>(`/memory/history/${day}`);
+        const data = await apiGet(`/memory/history/${day}`);
         setMessages(Array.isArray(data) ? data : []);
       } catch {
         setErr("Couldn't load day history.");

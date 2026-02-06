@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import AuthGate from "../components/AuthGate";
+import { apiGet, apiPost } from "../lib/api";
 
 type WeeklyItem = {
   id: number;
@@ -28,10 +29,6 @@ function cleanReflectionText(s: string) {
   return t;
 }
 
-function apiBase() {
-  return process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-}
-
 export default function WeeklyReflectionPage() {
   return (
     <AuthGate>
@@ -41,7 +38,6 @@ export default function WeeklyReflectionPage() {
 }
 
 function WeeklyReflectionPageContent() {
-  const API = useMemo(() => apiBase(), []);
   const [sid] = useState("default");
 
   const [item, setItem] = useState<WeeklyItem | null>(null);
@@ -51,11 +47,9 @@ function WeeklyReflectionPageContent() {
   async function loadLatest() {
     setErr("");
     try {
-      const r = await fetch(`${API}/memory/reflection/weekly/latest?sid=${encodeURIComponent(sid)}`, {
-        cache: "no-store",
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j?.detail || "Failed to load latest reflection.");
+      const j: any = await apiGet(
+        `/memory/reflection/weekly/latest?sid=${encodeURIComponent(sid)}`
+      );
       setItem(j?.item || null);
     } catch (e: any) {
       setErr(e?.message || "Failed to load latest reflection.");
@@ -66,13 +60,11 @@ function WeeklyReflectionPageContent() {
     setErr("");
     setLoading(true);
     try {
-      const r = await fetch(`${API}/memory/reflection/weekly/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sid, days: 7, force }),
+      const j: any = await apiPost("/memory/reflection/weekly/generate", {
+        sid,
+        days: 7,
+        force,
       });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j?.detail || "Generate failed.");
       setItem(j?.item || null);
     } catch (e: any) {
       setErr(e?.message || "Generate failed.");

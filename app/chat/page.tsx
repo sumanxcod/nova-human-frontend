@@ -5,7 +5,7 @@ import AuthGate from "../components/AuthGate";
 export default function ChatPage() {
   return (
     <AuthGate>
-      <Suspense fallback={<div style={{ padding: 16 }}>Loading…</div>}>
+      <Suspense fallback={<div className="p-4">Loading…</div>}>
         <ChatClient />
       </Suspense>
     </AuthGate>

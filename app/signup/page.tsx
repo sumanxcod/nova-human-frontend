@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost, apiGet, API_BASE } from "../lib/api";
+import { apiPost, apiGet } from "../lib/api";
+import { API_BASE } from "../lib/config";
 
 export default function SignupPage() {
   console.log("API_BASE_DEBUG", process.env.NEXT_PUBLIC_API_BASE_URL);
@@ -33,7 +34,7 @@ export default function SignupPage() {
 
     setLoading(true);
     try {
-      const data = await apiPost<{ ok: boolean; token: string; user: any }>("/auth/signup", {
+      const data = await apiPost("/auth/signup", {
         email: cleanEmail,
         password,
       });

@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AuthGate from "../components/AuthGate";
+import { apiGet, apiPost } from "../lib/api";
 
 type ActionPlanV1 = {
   direction_title: string;
@@ -53,14 +54,8 @@ function ActionPlanPageContent() {
   useEffect(() => {
     async function loadPlan() {
       try {
-        const base = process.env.NEXT_PUBLIC_API_BASE;
-        if (!base) return;
-
-        const res = await fetch(`${base}/memory/action_plan`);
-        const data = await res.json().catch(() => ({}));
-        if (data?.plan) {
-          setPlan(data.plan);
-        }
+        const data: any = await apiGet("/memory/action_plan");
+        if (data?.plan) setPlan(data.plan);
       } catch {
         // silent fail for now
       }
@@ -86,22 +81,12 @@ function ActionPlanPageContent() {
     });
 
     try {
-      const base = process.env.NEXT_PUBLIC_API_BASE;
-      if (!base) return;
-
-      const res = await fetch(`${base}/memory/action_plan/task`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          index: i,
-          done: !task.done,
-        }),
+      const data: any = await apiPost("/memory/action_plan/task", {
+        index: i,
+        done: !task.done,
       });
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.ok) {
-        throw new Error(data?.error || "Failed to save task");
-      }
+      if (!data?.ok) throw new Error(data?.error || "Failed to save task");
     } catch (e) {
       // rollback on failure
       setPlan((prev) => {
@@ -120,32 +105,14 @@ function ActionPlanPageContent() {
     setIsGenerating(true);
     setStatus("");
     try {
-      const base = process.env.NEXT_PUBLIC_API_BASE;
-      if (!base) {
-        setStatus("Missing NEXT_PUBLIC_API_BASE");
-        return;
-      }
-
-      const postRes = await fetch(`${base}/memory/action_plan/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ force: true }),
-      });
-
-      const postData = await postRes.json().catch(() => ({}));
-
-      if (!postRes.ok) {
-        setStatus(`Generate failed: HTTP ${postRes.status}`);
-        return;
-      }
+      const postData: any = await apiPost("/memory/action_plan/generate", { force: true });
       if (!postData?.ok) {
         setStatus(postData?.error || "Generate failed");
         return;
       }
 
       // ✅ Pull the saved plan from GET so UI always matches DB
-      const getRes = await fetch(`${base}/memory/action_plan`);
-      const getData = await getRes.json().catch(() => ({}));
+      const getData: any = await apiGet("/memory/action_plan");
       if (getData?.plan) setPlan(getData.plan);
 
       setStatus("✅ Action Plan generated");

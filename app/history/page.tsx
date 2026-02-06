@@ -27,7 +27,7 @@ function HistoryPageContent() {
   useEffect(() => {
     (async () => {
       try {
-        const data = await apiGet<HistoryItem[]>("/memory/history");
+        const data = await apiGet("/memory/history");
         setItems(Array.isArray(data) ? data : []);
       } catch (e: any) {
         setErr(e?.message || String(e));

@@ -376,7 +376,7 @@ export default function Chat() {
         try {
           await wakeBackendOnce();
 
-          const data = await apiGet<any>(
+          const data = await apiGet(
             `/memory/chat?sid=${encodeURIComponent(sid)}`
           );
           const list = coerceMessages(data);
