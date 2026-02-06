@@ -40,7 +40,7 @@ function CheckInPageContent() {
     setErr(null);
 
     try {
-      const d = await apiGet<TodayResp>("/memory/checkin/today");
+      const d = (await apiGet("/memory/checkin/today")) as TodayResp;
       setData(d);
 
       if (d.checkin) {
