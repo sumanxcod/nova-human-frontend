@@ -39,8 +39,8 @@ export default function DirectionBar() {
   const [direction, setDirection] = useState<Direction | null>(null);
 
   useEffect(() => {
-    apiGet<DirectionResponse>("/memory/direction")
-      .then((res) => setDirection(res.direction ?? null))
+    apiGet("/memory/direction")
+      .then((res) => setDirection((res as DirectionResponse).direction ?? null))
       .catch(() => setDirection(null));
   }, []);
 
