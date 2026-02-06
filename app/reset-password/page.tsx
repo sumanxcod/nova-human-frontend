@@ -7,7 +7,7 @@ type ResetPasswordSearchParams = {
 export default async function ResetPasswordPage({
   searchParams,
 }: {
-  searchParams?: Promise<ResetPasswordSearchParams> | ResetPasswordSearchParams;
+  searchParams?: Promise<ResetPasswordSearchParams>;
 }) {
   const resolved = searchParams ? await searchParams : {};
   const token = typeof resolved?.token === "string" ? resolved.token : "";
