@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost } from "../lib/api";
-import { setToken } from "../lib/auth";
+import { apiPost } from "../../lib/api";
+import { setToken } from "../../lib/auth";
 
 export default function SignupPage() {
   const router = useRouter();
