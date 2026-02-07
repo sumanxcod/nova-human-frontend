@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiPost, apiGet } from "../lib/api";
 import { API_BASE } from "../lib/config";
+import { setToken } from "../lib/auth";
 
 export default function SignupPage() {
   console.log("API_BASE_DEBUG", process.env.NEXT_PUBLIC_API_BASE_URL);
@@ -41,7 +42,7 @@ export default function SignupPage() {
 
       // Store token and redirect
       if (data?.token) {
-        localStorage.setItem("nh_token", data.token);
+        setToken(data.token);
         router.push("/chat");
       } else {
         setError("Signup succeeded but no token received.");

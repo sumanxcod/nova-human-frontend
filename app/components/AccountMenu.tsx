@@ -76,19 +76,17 @@ export default function AccountMenu() {
 
   if (!token) {
     return (
-      <div className="absolute right-4 top-4 z-[60]">
-        <button
-          onClick={() => router.push("/login")}
-          className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-100 hover:bg-white/10"
-        >
-          Login
-        </button>
-      </div>
+      <button
+        onClick={() => router.push("/login")}
+        className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-100 hover:bg-white/10"
+      >
+        Login
+      </button>
     );
   }
 
   return (
-    <div className="absolute right-4 top-4 z-[60]" ref={menuRef}>
+    <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-sm font-semibold text-zinc-100 hover:bg-white/10"
@@ -101,7 +99,7 @@ export default function AccountMenu() {
       </button>
 
       {open && (
-        <div className="mt-2 w-56 rounded-xl border border-white/10 bg-zinc-950/95 p-2 shadow-xl backdrop-blur">
+        <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/10 bg-zinc-950/95 p-2 shadow-xl backdrop-blur">
           {me?.email && (
             <div className="px-3 py-2 text-xs text-zinc-400">
               {me.email}

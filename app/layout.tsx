@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import SidebarClient from "./components/SidebarClient";
 import MobileShell from "./mobile-shell";
 import MobileTabs from "./components/MobileTabs";
-import AccountMenu from "./components/AccountMenu";
+import Header from "./components/Header";
 
 export const metadata: Metadata = {
   title: "Nova Human",
@@ -40,13 +40,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <SidebarClient />
           </Suspense>
 
-          <AccountMenu />
-
          <main className="flex-1 flex flex-col min-h-0 w-full">
-         <div className="flex-1 min-h-0 overflow-y-auto pb-16 md:pb-0">
-         {children}
-       </div>
-       </main>
+           <Header />
+           <div className="flex-1 min-h-0 overflow-y-auto pb-16 md:pb-0">
+             {children}
+           </div>
+         </main>
 
 
           <MobileTabs />

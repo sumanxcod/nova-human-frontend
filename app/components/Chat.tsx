@@ -560,49 +560,6 @@ export default function Chat() {
   }
   return (
     <div className="flex flex-col h-full">
-      <header className="shrink-0 border-b border-white/10 bg-black/40 backdrop-blur">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div className="font-semibold text-lg">Nova Human</div>
-
-          {(direction || todayAction || tone) && (
-            <div className="hidden md:flex items-center gap-4 text-xs text-zinc-400">
-              {direction && (
-                <span>
-                  <span className="uppercase tracking-wide">Direction:</span>{" "}
-                  <span className="text-zinc-200">{direction}</span>
-                </span>
-              )}
-              {todayAction && (
-                <span>
-                  <span className="uppercase tracking-wide">Today:</span>{" "}
-                  <span className="text-zinc-200">{todayAction}</span>
-                </span>
-              )}
-              {!todayAction && tone && (
-                <span>
-                  <span className="uppercase tracking-wide">Mood:</span>{" "}
-                  <span className="text-zinc-200">{tone}</span>
-                </span>
-              )}
-            </div>
-          )}
-
-          <div className="flex items-center gap-3">
-            <div className="hidden md:block">
-              <button
-                onClick={startNewChat}
-                className="rounded-xl px-3 py-2 text-sm font-medium bg-white/5 border border-white/10 text-zinc-100 hover:bg-white/10"
-              >
-                + New chat
-              </button>
-            </div>
-            <div className="text-sm text-zinc-400">
-              Days left <span className="text-zinc-200 font-medium">30</span>
-            </div>
-          </div>
-        </div>
-      </header>
-
       <main
         ref={scrollerRef}
         className="flex-1 overflow-y-auto"

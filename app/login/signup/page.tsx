@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiPost } from "../lib/api";
+import { setToken } from "../lib/auth";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -10,7 +12,6 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
   const passwordValid = password.length >= 8;
 
   async function handleSignup(e: React.FormEvent) {
@@ -25,22 +26,12 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${apiBase}/auth/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.detail || data?.message || "Signup failed");
-      }
+      const data = await apiPost("/auth/signup", { email, password });
 
       // Store token
       const token = data?.token || data?.access_token || "";
       if (token) {
-        localStorage.setItem("nh_token", token);
+        setToken(token);
       }
 
       // Redirect to chat

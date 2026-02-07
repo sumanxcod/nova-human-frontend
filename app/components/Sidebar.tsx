@@ -99,13 +99,13 @@ export default function Sidebar() {
   }
 
   return (
-      <div className="h-full flex flex-col overflow-hidden bg-zinc-950">
+      <div className="h-screen flex flex-col overflow-y-auto bg-zinc-950">
 
         {/* Brand */}
       <div className="p-5">
         <div className="text-xl font-semibold">Nova Human</div>
 
-        <div className="hidden md:block">
+        <div>
           <button
             onClick={() => {
               // Close mobile nav
@@ -131,26 +131,6 @@ export default function Sidebar() {
 
       {/* Main nav */}
       <nav className="px-3 pb-2 flex flex-col gap-1">
-        <button
-          onClick={() => {
-            // Close mobile nav
-            const nav = document.getElementById("nav") as HTMLInputElement | null;
-            if (nav) nav.checked = false;
-
-            // ✅ Clear any persisted sid so nothing can auto-restore old chat
-            try {
-              localStorage.removeItem("nova_sid");
-              localStorage.removeItem("selected_chat_sid");
-              localStorage.removeItem("active_chat");
-            } catch {}
-
-            // ✅ Go to fresh chat
-            router.replace("/chat");
-          }}
-          className="md:hidden text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100 font-medium"
-        >
-          + New chat
-        </button>
         <button
           onClick={() => goTo("/chat")}
           className="text-left rounded-lg px-3 py-2 text-sm hover:bg-white/5 text-zinc-100"
@@ -212,7 +192,7 @@ export default function Sidebar() {
       <div className="mx-3 my-2 border-t border-white/10" />
 
       {/* Chat sessions list */}
-      <div className="px-3 pb-3 flex flex-col gap-1 overflow-y-auto">
+      <div className="px-3 pb-3 flex flex-col gap-1">
         {items.map((it) => {
           const isActive = activeSid === it.sid;
 

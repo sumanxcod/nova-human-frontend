@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { apiGet } from "../lib/api";
+import { getToken } from "../lib/auth";
 
 type AuthGateProps = {
   children: React.ReactNode;
@@ -13,18 +15,31 @@ export default function AuthGate({ children }: AuthGateProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const token = localStorage.getItem("nh_token");
-      if (!token || !token.trim()) {
-        router.push("/login");
-        return;
-      }
-      setIsAuthed(true);
-    } catch {
+    let mounted = true;
+    const token = getToken();
+    if (!token || !token.trim()) {
       router.push("/login");
-    } finally {
       setLoading(false);
+      return;
     }
+
+    apiGet("/auth/me")
+      .then(() => {
+        if (!mounted) return;
+        setIsAuthed(true);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setIsAuthed(false);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
   if (loading) {
