@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "../lib/api";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { usePWAInstall } from "@/app/lib/usePWAInstall";
+import { getToken } from "../lib/auth";
 
 type SessionItem = {
   sid: string;
@@ -21,43 +22,52 @@ export default function Sidebar() {
 
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const activeSid = searchParams.get("sid") || "";
+  const isAuthRoute =
+    pathname === "/login" ||
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/reset-password");
   
   const { canInstall, install, showIOSHint } = usePWAInstall();
 
   async function loadSessions() {
-  try {
-    // ✅ Check if user has token
-    const token = typeof window !== "undefined" ? localStorage.getItem("nh_token") : null;
-    if (!token) return;
+    try {
+      if (isAuthRoute) return;
 
-    await apiGet("/health");
-    const data: any = await apiGet("/memory/sessions");
-    const raw = (data?.items ?? data?.sessions ?? []) as any[];
+      const token = getToken();
+      if (!token) return;
 
-    const normalized: SessionItem[] = raw
-      .map((s) => ({
-        sid: String(s?.sid ?? s?.id ?? ""),
-        title: String(s?.title ?? "New chat"),
-        last: typeof s?.last === "string" ? s.last : "",
-        updated_at: typeof s?.updated_at === "string" ? s.updated_at : "",
-        count: Number.isFinite(Number(s?.count)) ? Number(s.count) : 0,
-      }))
-      .filter((s) => s.sid.length > 0)
-      .filter((s) => s.count > 0 || s.last.trim().length > 0);
+      await apiGet("/health");
+      const data: any = await apiGet("/memory/sessions");
+      const raw = (data?.items ?? data?.sessions ?? []) as any[];
 
-    setItems(normalized);
-  } catch (err: any) {
-    if (err?.message?.includes("401") || err?.message?.includes("Unauthorized")) return;
+      const normalized: SessionItem[] = raw
+        .map((s) => ({
+          sid: String(s?.sid ?? s?.id ?? ""),
+          title: String(s?.title ?? "New chat"),
+          last: typeof s?.last === "string" ? s.last : "",
+          updated_at: typeof s?.updated_at === "string" ? s.updated_at : "",
+          count: Number.isFinite(Number(s?.count)) ? Number(s.count) : 0,
+        }))
+        .filter((s) => s.sid.length > 0)
+        .filter((s) => s.count > 0 || s.last.trim().length > 0);
+
+      setItems(normalized);
+    } catch (err: any) {
+      if (err?.message?.includes("401") || err?.message?.includes("Unauthorized")) return;
+    }
   }
-}
 
 
   useEffect(() => {
+    if (isAuthRoute) return;
+
     loadSessions();
     const t = setInterval(loadSessions, 3000);
     return () => clearInterval(t);
-  }, [activeSid]);
+  }, [activeSid, isAuthRoute]);
 
   async function deleteSession(sid: string, title?: string) {
     const ok = window.confirm(

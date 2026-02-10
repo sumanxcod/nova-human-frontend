@@ -1,5 +1,5 @@
 import { API_BASE } from "./config";
-import { getToken, logout } from "./auth";
+import { clearToken, getToken, logout } from "./auth";
 
 type RequestOptions = {
   method?: string;
@@ -49,7 +49,18 @@ export async function request(path: string, options: RequestOptions = {}) {
 
   if (res.status === 401) {
     if (typeof window !== "undefined") {
-      logout();
+      const path = window.location.pathname || "";
+      const isAuthRoute =
+        path === "/login" ||
+        path.startsWith("/signup") ||
+        path.startsWith("/forgot-password") ||
+        path.startsWith("/reset-password");
+
+      if (isAuthRoute) {
+        clearToken();
+      } else {
+        logout();
+      }
     }
     throw new Error("Session expired. Please log in again.");
   }
