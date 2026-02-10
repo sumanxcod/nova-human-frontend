@@ -29,10 +29,12 @@ export default function SignupPage() {
       const data = await apiPost("/auth/signup", { email, password });
 
       // Store token
-      const token = data?.token || data?.access_token || "";
-      if (token) {
-        setToken(token);
+      const token = data?.token || data?.access_token;
+      if (!token) {
+        throw new Error(data?.detail || "Signup failed: token missing");
       }
+
+      setToken(token);
 
       // Redirect to chat
       router.push("/chat");

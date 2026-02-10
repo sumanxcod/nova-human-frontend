@@ -41,12 +41,14 @@ export default function SignupPage() {
       });
 
       // Store token and redirect
-      if (data?.token) {
-        setToken(data.token);
-        router.push("/chat");
-      } else {
-        setError("Signup succeeded but no token received.");
+      const token = data?.token || data?.access_token;
+      if (!token) {
+        setError("Signup failed: token missing.");
+        return;
       }
+
+      setToken(token);
+      router.push("/chat");
     } catch (err: any) {
       setError(err?.message || "Signup failed. Try again.");
     } finally {

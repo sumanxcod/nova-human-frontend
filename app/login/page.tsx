@@ -21,13 +21,13 @@ export default function LoginPage() {
       const data = await apiPost("/auth/login", { email, password });
 
       // Store token
-      const token = data?.token || data?.access_token || "";
-      if (token) {
-        setToken(token);
+      const token = data?.token || data?.access_token;
+      if (!token) {
+        throw new Error(data?.detail || "Login failed: token missing");
       }
 
-      // Redirect to chat
-      router.push("/chat");
+      setToken(token);
+      window.location.href = "/chat";
     } catch (err: any) {
       setError(err?.message || "An error occurred. Please try again.");
     } finally {

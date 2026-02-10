@@ -1,5 +1,5 @@
 import { API_BASE } from "./config";
-import { clearToken, getToken } from "./auth";
+import { getToken, logout } from "./auth";
 
 type RequestOptions = {
   method?: string;
@@ -49,8 +49,7 @@ export async function request(path: string, options: RequestOptions = {}) {
 
   if (res.status === 401) {
     if (typeof window !== "undefined") {
-      clearToken();
-      window.location.href = "/login";
+      logout();
     }
     throw new Error("Session expired. Please log in again.");
   }
