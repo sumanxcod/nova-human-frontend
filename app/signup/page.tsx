@@ -36,7 +36,7 @@ export default function SignupPage() {
 
     setLoading(true);
     try {
-      const data = await apiFetch<{ token?: string; access_token?: string }>(
+      const data = await apiFetch<{ token?: string; access_token?: string; user?: any }>(
         "/auth/signup",
         {
           method: "POST",
