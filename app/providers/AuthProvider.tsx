@@ -15,6 +15,7 @@ type AuthState = {
   authReady: boolean;
   isAuthed: boolean;
   login: (email: string, password: string) => Promise<void>;
+  setAuthToken: (token: string, user?: User | null) => void;
   logout: () => void;
 };
 
@@ -56,6 +57,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         persistToken(newToken);
         setToken(newToken);
         setUser(data?.user || null);
+      },
+      setAuthToken: (newToken: string, userData?: User | null) => {
+        persistToken(newToken);
+        setToken(newToken);
+        setUser(userData || null);
       },
       logout: () => {
         clearToken();
