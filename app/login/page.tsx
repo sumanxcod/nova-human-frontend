@@ -19,7 +19,11 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const data = await apiFetch<{ token?: string; access_token?: string }>(
+      const data = await apiFetch<{
+        token?: string;
+        access_token?: string;
+        detail?: string;
+      }>(
         "/auth/login",
         {
           method: "POST",
