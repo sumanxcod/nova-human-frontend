@@ -40,15 +40,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthed: !!token,
       login: async (email: string, password: string) => {
         const base = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
-        const res = await fetch(`${base}/auth/login`, {
+        const url = `${base}/auth/login`;
+        const requestBody = { email, password };
+
+        // DIAGNOSTIC LOGGING
+        console.group("🔐 LOGIN REQUEST DIAGNOSTIC");
+        console.log("Base URL:", base);
+        console.log("Full URL:", url);
+        console.log("Email (exact):", JSON.stringify(email));
+        console.log("Password length:", password.length);
+        console.log("Request body:", JSON.stringify(requestBody));
+        console.log("Request body keys:", Object.keys(requestBody));
+        console.groupEnd();
+
+        const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify(requestBody),
         });
 
-        const data = await res.json().catch(() => ({}));
+        const responseText = await res.text();
+        
+        // DIAGNOSTIC LOGGING - RESPONSE
+        console.group("🔐 LOGIN RESPONSE DIAGNOSTIC");
+        console.log("Status:", res.status);
+        console.log("Status Text:", res.statusText);
+        console.log("Response body:", responseText);
+        console.groupEnd();
+
+        let data: any = {};
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          console.error("Failed to parse response as JSON");
+        }
+
         if (!res.ok) {
-          throw new Error(data?.detail || "Invalid email or password.");
+          throw new Error(data?.detail || responseText || "Invalid email or password.");
         }
 
         const newToken = data?.token;
