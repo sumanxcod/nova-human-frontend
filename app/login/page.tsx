@@ -41,7 +41,19 @@ export default function LoginPage() {
       login(token);
       router.replace("/chat");
     } catch (err: any) {
-      setError(err?.message || "An error occurred. Please try again.");
+      let message = err?.message || "An error occurred. Please try again.";
+
+      const bodyText = err?.bodyText;
+      if (typeof bodyText === "string" && bodyText.trim()) {
+        try {
+          const parsed = JSON.parse(bodyText) as { detail?: string };
+          if (parsed?.detail) message = parsed.detail;
+        } catch {
+          message = bodyText;
+        }
+      }
+
+      setError(message);
     } finally {
       setLoading(false);
     }
