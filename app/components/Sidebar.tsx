@@ -5,6 +5,7 @@ import { apiGet, apiPost } from "../lib/api";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { usePWAInstall } from "@/app/lib/usePWAInstall";
 import { getToken } from "../lib/auth";
+import { useAuth } from "../providers/AuthProvider";
 
 type SessionItem = {
   sid: string;
@@ -19,6 +20,7 @@ export default function Sidebar() {
   const [items, setItems] = useState<SessionItem[]>([]);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [modal, setModal] = useState<"about" | "privacy" | null>(null);
+  const { authReady, isAuthed } = useAuth();
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -35,6 +37,8 @@ export default function Sidebar() {
   async function loadSessions() {
     try {
       if (isAuthRoute) return;
+
+      if (!authReady || !isAuthed) return;
 
       const token = getToken();
       if (!token) return;
@@ -67,7 +71,7 @@ export default function Sidebar() {
     loadSessions();
     const t = setInterval(loadSessions, 3000);
     return () => clearInterval(t);
-  }, [activeSid, isAuthRoute]);
+  }, [activeSid, isAuthRoute, authReady, isAuthed]);
 
   async function deleteSession(sid: string, title?: string) {
     const ok = window.confirm(

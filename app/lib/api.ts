@@ -1,92 +1,55 @@
-import { API_BASE } from "./config";
-import { clearToken, getToken, logout } from "./auth";
+import { getToken } from "./auth";
 
-type RequestOptions = {
-  method?: string;
-  body?: any;
-  headers?: Record<string, string>;
+const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+const API_BASE = RAW_BASE.replace(/\/+$/, "") || "http://localhost:8000";
+
+type ApiError = Error & { status?: number; bodyText?: string };
+
+type ApiFetchOptions = RequestInit & {
+  auth?: boolean; // default true
 };
 
-function joinUrl(base: string, path: string) {
-  const cleanBase = base.replace(/\/+$/, "");
-  const cleanPath = path.replace(/^\/+/, "");
-  return `${cleanBase}/${cleanPath}`;
-}
+export async function apiFetch<T>(
+  path: string,
+  options: ApiFetchOptions = {}
+): Promise<T> {
+  const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+  const auth = options.auth !== false;
 
-export async function request(path: string, options: RequestOptions = {}) {
-  if (!API_BASE) {
-    throw new Error("API base URL is not configured. Set NEXT_PUBLIC_API_BASE_URL.");
+  const headers = new Headers(options.headers || {});
+  if (!headers.has("Content-Type") && options.body) {
+    headers.set("Content-Type", "application/json");
   }
 
-  const method = options.method || (options.body !== undefined ? "POST" : "GET");
-  const url = joinUrl(API_BASE, path);
-  const token = getToken();
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      method,
-      headers,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-      cache: "no-store",
-    });
-  } catch (err: any) {
-    const msg = err?.message?.includes("Failed to fetch")
-      ? "Network error: Unable to reach the backend."
-      : err?.message || "Network error.";
-    throw new Error(msg);
+  if (auth) {
+    const token = getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
   }
 
-  if (process.env.NODE_ENV !== "production") {
-    console.log(`[api] ${method} ${url} -> ${res.status}`);
-  }
-
-  if (res.status === 401) {
-    if (typeof window !== "undefined") {
-      const path = window.location.pathname || "";
-      const isAuthRoute =
-        path === "/login" ||
-        path.startsWith("/signup") ||
-        path.startsWith("/forgot-password") ||
-        path.startsWith("/reset-password");
-
-      if (isAuthRoute) {
-        clearToken();
-      } else {
-        logout();
-      }
-    }
-    throw new Error("Session expired. Please log in again.");
-  }
+  const res = await fetch(url, { ...options, headers });
 
   if (!res.ok) {
-    try {
-      const data = await res.json();
-      const detail = data?.detail || data?.message || JSON.stringify(data);
-      throw new Error(detail);
-    } catch (err: any) {
-      if (err instanceof Error) throw err;
-      throw new Error(`${res.status} ${res.statusText}`);
-    }
+    const text = await res.text().catch(() => "");
+    const err: ApiError = new Error(text || res.statusText);
+    err.status = res.status;
+    err.bodyText = text;
+    throw err;
   }
 
-  const contentType = res.headers.get("content-type") || "";
-  if (contentType.includes("application/json")) {
-    return res.json();
-  }
-  return res.text();
+  const ct = res.headers.get("content-type") || "";
+  if (!ct.includes("application/json")) return undefined as T;
+
+  return (await res.json()) as T;
 }
 
-export function apiGet(path: string) {
-  return request(path, { method: "GET" });
+export function apiGet<T>(path: string) {
+  return apiFetch<T>(path, { method: "GET" });
 }
 
-export function apiPost(path: string, body?: any) {
-  return request(path, { method: "POST", body: body ?? {} });
+export function apiPost<T>(path: string, body?: any, opts?: ApiFetchOptions) {
+  return apiFetch<T>(path, {
+    method: "POST",
+    body: body === undefined ? undefined : JSON.stringify(body),
+    ...opts,
+  });
 }

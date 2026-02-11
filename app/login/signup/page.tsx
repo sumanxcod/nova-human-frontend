@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost } from "../../lib/api";
-import { setToken } from "../../lib/auth";
+import { apiFetch } from "../../lib/api";
+import { useAuth } from "../../providers/AuthProvider";
 
 export default function SignupPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,7 +27,14 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const data = await apiPost("/auth/signup", { email, password });
+      const data = await apiFetch<{ token?: string; access_token?: string; detail?: string }>(
+        "/auth/signup",
+        {
+          method: "POST",
+          auth: false,
+          body: JSON.stringify({ email, password }),
+        }
+      );
 
       // Store token
       const token = data?.token || data?.access_token;
@@ -34,10 +42,10 @@ export default function SignupPage() {
         throw new Error(data?.detail || "Signup failed: token missing");
       }
 
-      setToken(token);
+      login(token);
 
       // Redirect to chat
-      router.push("/chat");
+      router.replace("/chat");
     } catch (err: any) {
       setError(err?.message || "An error occurred. Please try again.");
     } finally {

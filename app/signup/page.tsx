@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiPost, apiGet } from "../lib/api";
+import { apiFetch, apiGet } from "../lib/api";
 import { API_BASE } from "../lib/config";
-import { setToken } from "../lib/auth";
+import { useAuth } from "../providers/AuthProvider";
 
 export default function SignupPage() {
   console.log("API_BASE_DEBUG", process.env.NEXT_PUBLIC_API_BASE_URL);
   const router = useRouter();
+  const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,10 +36,14 @@ export default function SignupPage() {
 
     setLoading(true);
     try {
-      const data = await apiPost("/auth/signup", {
-        email: cleanEmail,
-        password,
-      });
+      const data = await apiFetch<{ token?: string; access_token?: string }>(
+        "/auth/signup",
+        {
+          method: "POST",
+          auth: false,
+          body: JSON.stringify({ email: cleanEmail, password }),
+        }
+      );
 
       // Store token and redirect
       const token = data?.token || data?.access_token;
@@ -47,8 +52,8 @@ export default function SignupPage() {
         return;
       }
 
-      setToken(token);
-      router.push("/chat");
+      login(token);
+      router.replace("/chat");
     } catch (err: any) {
       setError(err?.message || "Signup failed. Try again.");
     } finally {

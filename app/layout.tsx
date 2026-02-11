@@ -6,6 +6,7 @@ import SidebarClient from "./components/SidebarClient";
 import MobileShell from "./mobile-shell";
 import MobileTabs from "./components/MobileTabs";
 import Header from "./components/Header";
+import { AuthProvider } from "./providers/AuthProvider";
 
 export const metadata: Metadata = {
   title: "Nova Human",
@@ -35,21 +36,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="text-zinc-100" suppressHydrationWarning>
-        <MobileShell>
-          <Suspense fallback={null}>
-            <SidebarClient />
-          </Suspense>
+        <AuthProvider>
+          <MobileShell>
+            <Suspense fallback={null}>
+              <SidebarClient />
+            </Suspense>
 
-         <main className="flex-1 flex flex-col min-h-0 w-full">
-           <Header />
-           <div className="flex-1 min-h-0 overflow-y-auto pb-16 md:pb-0">
-             {children}
-           </div>
-         </main>
+            <main className="flex-1 flex flex-col min-h-0 w-full">
+              <Header />
+              <div className="flex-1 min-h-0 overflow-y-auto pb-16 md:pb-0">
+                {children}
+              </div>
+            </main>
 
-
-          <MobileTabs />
-        </MobileShell>
+            <MobileTabs />
+          </MobileShell>
+        </AuthProvider>
       </body>
     </html>
   );

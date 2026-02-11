@@ -1,4 +1,4 @@
-const TOKEN_KEY = "token";
+export const TOKEN_KEY = "nova_token";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -14,12 +14,3 @@ export function clearToken() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(TOKEN_KEY);
 }
-
-export function logout() {
-  if (typeof window !== "undefined") {
-    clearToken();
-    window.location.href = "/login";
-  }
-}
-
-export { TOKEN_KEY };

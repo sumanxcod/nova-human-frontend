@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiGet } from "../lib/api";
-import { getToken, logout } from "../lib/auth";
+import { useAuth } from "../providers/AuthProvider";
 
 type Me = {
   id: number | string;
@@ -18,6 +18,7 @@ function getInitial(email?: string) {
 }
 
 export default function AccountMenu() {
+  const { authReady, isAuthed, logout } = useAuth();
   const [open, setOpen] = useState(false);
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(false);
@@ -25,8 +26,7 @@ export default function AccountMenu() {
   const router = useRouter();
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
+    if (!authReady || !isAuthed) {
       setMe(null);
       return;
     }
@@ -50,7 +50,7 @@ export default function AccountMenu() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [authReady, isAuthed]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -72,9 +72,7 @@ export default function AccountMenu() {
     };
   }, []);
 
-  const token = getToken();
-
-  if (!token) {
+  if (!authReady || !isAuthed) {
     return (
       <button
         onClick={() => router.push("/login")}
