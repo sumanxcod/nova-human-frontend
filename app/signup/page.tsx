@@ -9,7 +9,7 @@ import { useAuth } from "../providers/AuthProvider";
 export default function SignupPage() {
   console.log("API_BASE_DEBUG", process.env.NEXT_PUBLIC_API_BASE_URL);
   const router = useRouter();
-  const { login } = useAuth();
+  const { setAuthToken } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -52,7 +52,7 @@ export default function SignupPage() {
         return;
       }
 
-      login(token);
+      setAuthToken(token, data?.user || null);
       router.replace("/chat");
     } catch (err: any) {
       setError(err?.message || "Signup failed. Try again.");

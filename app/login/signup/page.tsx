@@ -7,7 +7,7 @@ import { useAuth } from "../../providers/AuthProvider";
 
 export default function SignupPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { setAuthToken } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -42,7 +42,7 @@ export default function SignupPage() {
         throw new Error(data?.detail || "Signup failed: token missing");
       }
 
-      login(token);
+      setAuthToken(token, data?.user || null);
 
       // Redirect to chat
       router.replace("/chat");
