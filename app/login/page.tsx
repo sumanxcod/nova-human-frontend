@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,41 +20,17 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const data = await apiFetch<{
-        token?: string;
-        access_token?: string;
-        detail?: string;
-      }>(
-        "/auth/login",
-        {
-          method: "POST",
-          auth: false,
-          body: JSON.stringify({ email, password }),
-        }
-      );
+      const email = (emailRef.current?.value || "").trim().toLowerCase();
+      const password = passwordRef.current?.value || "";
 
-      // Store token
-      const token = data?.token || data?.access_token;
-      if (!token) {
-        throw new Error(data?.detail || "Login failed: token missing");
-      }
+      // Debug once (remove later)
+      console.log("LOGIN_PAYLOAD", { email, passwordLen: password.length });
 
-      login(token);
-      router.replace("/chat");
+      await login(email, password);
+
+      router.replace("/"); // or /chat or /today
     } catch (err: any) {
-      let message = err?.message || "An error occurred. Please try again.";
-
-      const bodyText = err?.bodyText;
-      if (typeof bodyText === "string" && bodyText.trim()) {
-        try {
-          const parsed = JSON.parse(bodyText) as { detail?: string };
-          if (parsed?.detail) message = parsed.detail;
-        } catch {
-          message = bodyText;
-        }
-      }
-
-      setError(message);
+      setError(err?.message || "Login failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -78,9 +55,10 @@ export default function LoginPage() {
             <div>
               <label className="block text-sm text-zinc-300 mb-2">Email</label>
               <input
+                ref={emailRef}
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                name="email"
+                autoComplete="email"
                 placeholder="you@example.com"
                 required
                 className="w-full rounded-lg bg-white/5 border border-white/10 px-4 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -90,9 +68,10 @@ export default function LoginPage() {
             <div>
               <label className="block text-sm text-zinc-300 mb-2">Password</label>
               <input
+                ref={passwordRef}
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                name="password"
+                autoComplete="current-password"
                 placeholder="••••••••"
                 required
                 className="w-full rounded-lg bg-white/5 border border-white/10 px-4 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
