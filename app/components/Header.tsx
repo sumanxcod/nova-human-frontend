@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import { usePathname } from "next/navigation";
-import AccountMenu from "./AccountMenu";
 
 function titleFromPath(pathname: string) {
   const clean = pathname.split("?")[0] || "/";
@@ -49,13 +48,12 @@ export default function Header() {
 
   return (
     <header className="shrink-0 border-b border-white/10 bg-black/40 backdrop-blur">
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="text-sm font-semibold text-zinc-100 md:text-base">
-          {title}
-        </div>
-        <div className="flex items-center gap-2">
-          <AccountMenu />
-        </div>
+      <div className="flex min-h-[2.75rem] items-center px-4 py-3">
+        {title ? (
+          <div className="text-sm font-semibold text-zinc-100 md:text-base">
+            {title}
+          </div>
+        ) : null}
       </div>
     </header>
   );

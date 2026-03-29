@@ -2,11 +2,13 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { clearToken, getToken, setToken as persistToken } from "../lib/auth";
+import { apiFetch } from "../lib/api";
 
 type User = {
   id?: string;
   email?: string;
   name?: string;
+  onboarding_completed?: boolean;
 };
 
 type AuthState = {
@@ -27,9 +29,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authReady, setAuthReady] = useState(false);
 
   useEffect(() => {
-    const t = getToken();
-    setToken(t);
-    setAuthReady(true);
+    const initAuth = async () => {
+      const t = getToken();
+
+      if (!t) {
+        setAuthReady(true);
+        return;
+      }
+
+      setToken(t);
+
+      try {
+        const me = await apiFetch<User>("/auth/me");
+        setUser(me || null);
+      } catch {
+        clearToken();
+        setToken(null);
+        setUser(null);
+      } finally {
+        setAuthReady(true);
+      }
+    };
+
+    void initAuth();
   }, []);
 
   const value = useMemo<AuthState>(() => {
@@ -39,52 +61,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authReady,
       isAuthed: !!token,
       login: async (email: string, password: string) => {
-        const base = (process.env.NEXT_PUBLIC_API_BASE_URL || "").replace(/\/+$/, "");
-        const url = `${base}/auth/login`;
-        const requestBody = { email, password };
-
-        // DIAGNOSTIC LOGGING
-        console.group("🔐 LOGIN REQUEST DIAGNOSTIC");
-        console.log("Base URL:", base);
-        console.log("Full URL:", url);
-        console.log("Email (exact):", JSON.stringify(email));
-        console.log("Password length:", password.length);
-        console.log("Request body:", JSON.stringify(requestBody));
-        console.log("Request body keys:", Object.keys(requestBody));
-        console.groupEnd();
-
-        const res = await fetch(url, {
+        const data = await apiFetch<any>("/auth/login", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
+          auth: false,
+          body: JSON.stringify({ email, password }),
         });
-
-        const responseText = await res.text();
-        
-        // DIAGNOSTIC LOGGING - RESPONSE
-        console.group("🔐 LOGIN RESPONSE DIAGNOSTIC");
-        console.log("Status:", res.status);
-        console.log("Status Text:", res.statusText);
-        console.log("Response body:", responseText);
-        console.groupEnd();
-
-        let data: any = {};
-        try {
-          data = JSON.parse(responseText);
-        } catch {
-          console.error("Failed to parse response as JSON");
-        }
-
-        if (!res.ok) {
-          throw new Error(data?.detail || responseText || "Invalid email or password.");
-        }
-
-        const newToken = data?.token;
+        const newToken = data?.token || data?.access_token;
         if (!newToken) throw new Error("Missing token from server.");
 
         persistToken(newToken);
         setToken(newToken);
-        setUser(data?.user || null);
+
+        try {
+          const me = await apiFetch<User>("/auth/me");
+          setUser(me || null);
+        } catch {
+          clearToken();
+          setToken(null);
+          setUser(null);
+          throw new Error("Login session is invalid.");
+        }
       },
       setAuthToken: (newToken: string, userData?: User | null) => {
         persistToken(newToken);

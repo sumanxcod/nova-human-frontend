@@ -76,6 +76,15 @@ export default function LoginPage() {
                 required
                 className="w-full rounded-lg bg-white/5 border border-white/10 px-4 py-2 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+              <div className="flex justify-between text-sm mt-2">
+                <a href="/forgot-password" className="text-blue-600 hover:underline">
+                  Forgot password?
+                </a>
+
+                <a href="/signup" className="text-blue-600 hover:underline">
+                  Create account
+                </a>
+              </div>
             </div>
 
             <button
@@ -86,12 +95,6 @@ export default function LoginPage() {
               {loading ? "Logging in…" : "Log in"}
             </button>
 
-            <div className="mt-4 text-center text-sm text-zinc-400">
-              Don&apos;t have an account?{" "}
-              <a href="/signup" className="text-zinc-100 hover:underline">
-                Create one
-              </a>
-            </div>
           </form>
 
           <p className="mt-6 text-center text-xs text-zinc-500">

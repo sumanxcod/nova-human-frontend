@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiGet, apiPost } from "../lib/api";
 import AuthGate from "../components/AuthGate";
 
 /* ------------------ Types ------------------ */
@@ -16,6 +15,32 @@ type TodayResp = {
   escalation_level: number;
   tone: string;
 };
+
+const STORAGE_KEY = "nova_checkin_local_v1";
+
+function todayDateStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function loadLocal(): TodayResp | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as TodayResp;
+    if (!parsed?.date) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocal(data: TodayResp) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // ignore
+  }
+}
 
 /* ------------------ Component ------------------ */
 export default function CheckInPage() {
@@ -35,33 +60,25 @@ function CheckInPageContent() {
   const [todayAction, setTodayAction] = useState("");
   const [note, setNote] = useState("");
 
-  async function load() {
-    setLoading(true);
-    setErr(null);
-
-    try {
-      const d = (await apiGet("/memory/checkin/today")) as TodayResp;
+  useEffect(() => {
+    const today = todayDateStr();
+    const d = loadLocal();
+    if (d && d.date === today) {
       setData(d);
-
       if (d.checkin) {
         setMovedForward(Boolean(d.checkin.moved_forward));
         setTodayAction(d.checkin.today_action || "");
         setNote(d.checkin.note || "");
-      } else {
-        setMovedForward(null);
-        setTodayAction("");
-        setNote("");
       }
-    } catch (e: any) {
-      setErr(e?.message || String(e));
-      setData(null);
-    } finally {
-      setLoading(false);
+    } else {
+      setData({
+        date: today,
+        checkin: null,
+        escalation_level: 0,
+        tone: "—",
+      });
     }
-  }
-
-  useEffect(() => {
-    load();
+    setLoading(false);
   }, []);
 
   async function submit() {
@@ -77,17 +94,20 @@ function CheckInPageContent() {
 
     setErr(null);
 
-    try {
-      await apiPost("/memory/chec-kin/today", {
-        moved_forward: movedForward ? 1 : 0, // ✅ backend expects 0/1
+    const today = todayDateStr();
+    const next: TodayResp = {
+      date: today,
+      escalation_level: data?.escalation_level ?? 0,
+      tone: data?.tone ?? "—",
+      checkin: {
+        date: today,
+        moved_forward: movedForward,
         today_action: todayAction.trim(),
         note: note.trim(),
-      });
-
-      await load();
-    } catch (e: any) {
-      setErr(e?.message || String(e));
-    }
+      },
+    };
+    saveLocal(next);
+    setData(next);
   }
 
   if (loading) {
@@ -99,6 +119,9 @@ function CheckInPageContent() {
       <div>
         <h1 className="text-2xl font-semibold">Checkin</h1>
         <p className="text-sm opacity-70">Daily execution, not motivation.</p>
+        <p className="mt-2 text-xs text-zinc-500">
+          Saved on this device only (no server sync).
+        </p>
       </div>
 
       {data && (

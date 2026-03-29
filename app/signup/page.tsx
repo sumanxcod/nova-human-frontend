@@ -2,34 +2,24 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetch, apiGet } from "../lib/api";
-import { API_BASE } from "../lib/config";
+import { apiFetch } from "../lib/api";
 import { useAuth } from "../providers/AuthProvider";
 
 export default function SignupPage() {
-  console.log("API_BASE_DEBUG", process.env.NEXT_PUBLIC_API_BASE_URL);
   const router = useRouter();
   const { setAuthToken } = useAuth();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<string | null>(null);
-
-  async function testBackend() {
-    setTestResult("Testing...");
-    try {
-      await apiGet("/health");
-      setTestResult("✅ Backend reachable");
-    } catch (err: any) {
-      setTestResult(`❌ ${err?.message || "Backend unreachable"}`);
-    }
-  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
+    const cleanName = name.trim();
     const cleanEmail = email.trim().toLowerCase();
     if (!cleanEmail) return setError("Email is required.");
     if (password.length < 8) return setError("Password must be at least 8 characters.");
@@ -41,7 +31,11 @@ export default function SignupPage() {
         {
           method: "POST",
           auth: false,
-          body: JSON.stringify({ email: cleanEmail, password }),
+          body: JSON.stringify({
+            name: cleanName || undefined,
+            email: cleanEmail,
+            password,
+          }),
         }
       );
 
@@ -52,7 +46,7 @@ export default function SignupPage() {
         return;
       }
 
-      setAuthToken(token, data?.user || null);
+      setAuthToken(token, data?.user || { name: cleanName || undefined, email: cleanEmail });
       router.replace("/chat");
     } catch (err: any) {
       setError(err?.message || "Signup failed. Try again.");
@@ -71,6 +65,18 @@ export default function SignupPage() {
 
         <form onSubmit={onSubmit} className="mt-8 space-y-4">
           <div>
+            <label className="text-sm text-zinc-300">Name</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              type="text"
+              autoComplete="name"
+              className="mt-2 w-full rounded-xl bg-black/30 border border-white/10 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-white/20"
+              placeholder="Your name"
+            />
+          </div>
+
+          <div>
             <label className="text-sm text-zinc-300">Email</label>
             <input
               value={email}
@@ -79,6 +85,18 @@ export default function SignupPage() {
               autoComplete="email"
               className="mt-2 w-full rounded-xl bg-black/30 border border-white/10 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-white/20"
               placeholder="you@example.com"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm text-zinc-300">Phone (optional)</label>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              type="tel"
+              autoComplete="tel"
+              className="mt-2 w-full rounded-xl bg-black/30 border border-white/10 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-white/20"
+              placeholder="+1 555 123 4567"
             />
           </div>
 
@@ -114,23 +132,6 @@ export default function SignupPage() {
             </a>
           </div>
         </form>
-
-        {/* Test Backend Button */}
-        <div className="mt-4 text-center">
-          <button
-            onClick={testBackend}
-            type="button"
-            className="text-xs text-zinc-400 hover:text-zinc-200 underline"
-          >
-            Test backend connection
-          </button>
-          {testResult && (
-            <div className="mt-2 text-xs text-zinc-300">{testResult}</div>
-          )}
-          {API_BASE && (
-            <div className="mt-1 text-xs text-zinc-600">API: {API_BASE}</div>
-          )}
-        </div>
 
         <div className="mt-6 text-center text-xs text-zinc-500">Protected by Nova Human</div>
       </div>

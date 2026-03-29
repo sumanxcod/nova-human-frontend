@@ -3,7 +3,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AuthGate from "../components/AuthGate";
-import { apiGet, apiPost } from "../lib/api";
 
 type ActionPlanV1 = {
   direction_title: string;
@@ -52,76 +51,55 @@ function ActionPlanPageContent() {
   const [status, setStatus] = useState<string>("");
 
   useEffect(() => {
-    async function loadPlan() {
-      try {
-        const data: any = await apiGet("/memory/action_plan");
-        if (data?.plan) setPlan(data.plan);
-      } catch {
-        // silent fail for now
+    try {
+      const raw = localStorage.getItem("nova_action_plan_local_v1");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.plan) setPlan(parsed.plan as ActionPlanV1);
       }
+    } catch {
+      // keep placeholder
     }
-
-    loadPlan();
   }, []);
 
-  async function toggleWeekTask(i: number) {
+  function toggleWeekTask(i: number) {
     if (!plan) return;
 
     const task = plan.week_tasks[i];
     if (!task) return;
 
-    // Optimistic UI update
     setPlan((prev) => {
       if (!prev) return prev;
       const copy = { ...prev };
       copy.week_tasks = prev.week_tasks.map((t, idx) =>
         idx === i ? { ...t, done: !t.done } : t
       );
+      try {
+        localStorage.setItem("nova_action_plan_local_v1", JSON.stringify({ plan: copy }));
+      } catch {
+        // ignore
+      }
       return copy;
     });
-
-    try {
-      const data: any = await apiPost("/memory/action_plan/task", {
-        index: i,
-        done: !task.done,
-      });
-
-      if (!data?.ok) throw new Error(data?.error || "Failed to save task");
-    } catch (e) {
-      // rollback on failure
-      setPlan((prev) => {
-        if (!prev) return prev;
-        const copy = { ...prev };
-        copy.week_tasks = prev.week_tasks.map((t, idx) =>
-          idx === i ? { ...t, done: task.done } : t
-        );
-        return copy;
-      });
-      alert("Could not save task. Try again.");
-    }
   }
 
-  async function generateManual() {
+  function generateManual() {
     setIsGenerating(true);
     setStatus("");
-    try {
-      const postData: any = await apiPost("/memory/action_plan/generate", { force: true });
-      if (!postData?.ok) {
-        setStatus(postData?.error || "Generate failed");
-        return;
-      }
-
-      // ✅ Pull the saved plan from GET so UI always matches DB
-      const getData: any = await apiGet("/memory/action_plan");
-      if (getData?.plan) setPlan(getData.plan);
-
-      setStatus("✅ Action Plan generated");
-      setTimeout(() => setStatus(""), 2000);
-    } catch (e: any) {
-      setStatus(e?.message || String(e));
-    } finally {
+    window.setTimeout(() => {
+      setPlan((p) => {
+        const next = p ?? placeholderPlan;
+        try {
+          localStorage.setItem("nova_action_plan_local_v1", JSON.stringify({ plan: next }));
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+      setStatus("Saved locally (server action plan is disabled in this build).");
       setIsGenerating(false);
-    }
+      setTimeout(() => setStatus(""), 4000);
+    }, 300);
   }
 
   // ✅ derived value: plan exists if milestones exist

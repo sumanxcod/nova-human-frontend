@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
+import "katex/dist/katex.min.css";
 import "./globals.css";
 import PreviewGate from "./components/PreviewGate";
 import { Suspense } from "react";
 import SidebarClient from "./components/SidebarClient";
 import MobileShell from "./mobile-shell";
-import MobileTabs from "./components/MobileTabs";
 import Header from "./components/Header";
 import { AuthProvider } from "./providers/AuthProvider";
 
@@ -38,18 +38,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="text-zinc-100" suppressHydrationWarning>
         <AuthProvider>
           <MobileShell>
+            {/* ReminderPoller: disabled during chat-flow stabilization (no chat state coupling; avoid extra polling noise). Re-enable when ready. */}
             <Suspense fallback={null}>
               <SidebarClient />
             </Suspense>
 
             <main className="flex-1 flex flex-col min-h-0 w-full">
               <Header />
-              <div className="flex-1 min-h-0 overflow-y-auto pb-16 md:pb-0">
+              <div className="flex-1 min-h-0 overflow-y-auto pb-0">
                 {children}
               </div>
             </main>
-
-            <MobileTabs />
           </MobileShell>
         </AuthProvider>
       </body>

@@ -1,18 +1,24 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiGet } from "../lib/api";
+import { apiFetch, apiGet } from "../lib/api";
 import { getToken } from "../lib/auth";
 
 type Me = {
   id: number | string;
+  name?: string;
   email?: string;
   created_at?: string;
 };
 
 export default function ProfilePage() {
   const [me, setMe] = useState<Me | null>(null);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     const token = getToken();
@@ -25,7 +31,10 @@ export default function ProfilePage() {
     apiGet("/auth/me")
       .then((data) => {
         if (!mounted) return;
-        setMe(data as Me);
+        const profile = data as Me;
+        setMe(profile);
+        setName(profile?.name || "");
+        setEmail(profile?.email || "");
       })
       .catch(() => {
         if (!mounted) return;
@@ -40,6 +49,42 @@ export default function ProfilePage() {
       mounted = false;
     };
   }, []);
+
+  async function saveEmail(e: React.FormEvent) {
+    e.preventDefault();
+    if (!me) return;
+
+    const nextEmail = email.trim();
+    if (!nextEmail) {
+      setErr("Email is required.");
+      setMsg(null);
+      return;
+    }
+
+    setSaving(true);
+    setErr(null);
+    setMsg(null);
+
+    try {
+      const updated = await apiFetch<Partial<Me>>("/auth/me", {
+        method: "PATCH",
+        body: JSON.stringify({ email: nextEmail }),
+      });
+
+      const resolvedEmail =
+        typeof updated?.email === "string" && updated.email.trim()
+          ? updated.email
+          : nextEmail;
+
+      setMe((prev) => (prev ? { ...prev, email: resolvedEmail } : prev));
+      setEmail(resolvedEmail);
+      setMsg("Email updated.");
+    } catch (error: any) {
+      setErr(error?.message || "Could not update email.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
@@ -61,9 +106,34 @@ export default function ProfilePage() {
           {!loading && me && (
             <>
               <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                <div className="text-xs text-zinc-400">Email</div>
-                <div className="mt-1 text-zinc-100">{me.email || "—"}</div>
+                <div className="text-xs text-zinc-400">Name</div>
+                <div className="mt-1 text-zinc-100">{name || "—"}</div>
               </div>
+              <form
+                onSubmit={saveEmail}
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3"
+              >
+                <div className="text-xs text-zinc-400">Email</div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-zinc-100 placeholder:text-zinc-500 outline-none"
+                  placeholder="you@example.com"
+                  required
+                />
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-100 hover:bg-white/10 disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : "Save"}
+                  </button>
+                  {msg && <div className="text-xs text-green-400">{msg}</div>}
+                </div>
+                {err && <div className="mt-2 text-xs text-red-400">{err}</div>}
+              </form>
               <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
                 <div className="text-xs text-zinc-400">Created at</div>
                 <div className="mt-1 text-zinc-100">{me.created_at || "—"}</div>

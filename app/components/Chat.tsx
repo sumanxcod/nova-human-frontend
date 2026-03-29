@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { apiGet, apiPost } from "../lib/api";
 import { useRouter, useSearchParams } from "next/navigation";
-import { fetchTodayCheckin } from "../lib/checkinApi";
-import { fetchDirection } from "../lib/directionApi";
 import NovaHumanLogo from "./NovaHumanLogo";
+import MarkdownRenderer from "./MarkdownRenderer";
+import { useAuth } from "../providers/AuthProvider";
 
 export type Msg = {
   role: "user" | "assistant";
@@ -14,25 +14,9 @@ export type Msg = {
   mode?: string;
 };
 
-type DirectionResponse = {
-  title?: string;
-  direction?: {
-    title?: string;
-  };
-};
-
-// ✅ Generate unique session ID
 function generateSessionId(): string {
   return `nova_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
 }
-
-type CheckinResponse = {
-  tone?: string;
-  today_action?: string;
-  checkin?: {
-    today_action?: string;
-  };
-};
 
 // --------------------
 // ✅ Helpers (Response Contract + Category Hint)
@@ -115,7 +99,6 @@ Rules:
 - End with ONE next action the user can do now.
 - If user is overwhelmed, narrow to one choice (A/B/C).
 - If mental/health concern: be supportive, recommend professional help when appropriate, do not diagnose.
-- When direction context exists, align advice with it.
 `.trim();
 
 // --------------------
@@ -124,11 +107,18 @@ Rules:
 function coerceMessages(input: any): Msg[] | null {
   if (!input) return null;
 
-  const raw = Array.isArray(input)
-    ? input
-    : Array.isArray(input?.messages)
-      ? input.messages
-      : null;
+  const raw =
+    Array.isArray(input)
+      ? input
+      : Array.isArray(input?.messages)
+        ? input.messages
+        : Array.isArray(input?.items)
+          ? input.items
+          : Array.isArray(input?.data?.messages)
+            ? input.data.messages
+            : Array.isArray(input?.data?.items)
+              ? input.data.items
+              : null;
 
   if (!raw) return null;
 
@@ -162,6 +152,13 @@ function coerceMessages(input: any): Msg[] | null {
 function extractAssistantText(res: any): string {
   if (!res) return "";
 
+  const fromAssistantField =
+    (typeof res.assistant_message === "string" && res.assistant_message.trim()) ||
+    (typeof res?.data?.assistant_message === "string" &&
+      res.data.assistant_message.trim()) ||
+    "";
+  if (fromAssistantField) return fromAssistantField;
+
   const msgs = coerceMessages(res);
   if (msgs?.length) {
     const lastAssistant = [...msgs].reverse().find((m) => m.role === "assistant");
@@ -169,7 +166,6 @@ function extractAssistantText(res: any): string {
   }
 
   const s =
-    res?.assistant_message ??
     res?.assistant_text ??
     res?.content ??
     res?.message ??
@@ -196,26 +192,43 @@ function extractAssistantText(res: any): string {
   return "";
 }
 
-const NEW_CHAT_EVENT = "nova:new-chat";
+/** True when the backend reports failure in JSON while still using HTTP 200. */
+function isChatApplicationFailure(res: any): boolean {
+  if (res == null || typeof res !== "object") return false;
+  const hasAssistant =
+    (typeof res.assistant_message === "string" && res.assistant_message.trim()) ||
+    (typeof res.data?.assistant_message === "string" &&
+      res.data.assistant_message.trim()) ||
+    Boolean(coerceMessages(res)?.length);
+  if (hasAssistant) return false;
+  return res.ok === false;
+}
 
 export default function Chat() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { authReady, user } = useAuth();
+
+  const displayName =
+    user?.name?.split(" ")[0] || user?.email?.split("@")[0] || "there";
 
   // ✅ SID comes ONLY from URL (no auto create on mount)
   const sid = searchParams.get("sid") || "";
+  const activeSidRef = useRef<string>(searchParams.get("sid") || "");
+
+  useEffect(() => {
+    const urlSid = searchParams.get("sid") || "";
+    if (urlSid) {
+      activeSidRef.current = urlSid;
+    }
+  }, [searchParams]);
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [briefing, setBriefing] = useState<string | null>(null);
 
-  // Execution context state
-  const [direction, setDirection] = useState<string | null>(null);
-  const [todayAction, setTodayAction] = useState<string | null>(null);
-  const [tone, setTone] = useState<string | null>(null);
-
-  const didNudgeRef = useRef(false);
   const sendingRef = useRef(false);
 
   // --------------------
@@ -228,6 +241,35 @@ export default function Chat() {
   // Voice output (Browser TTS)
   // --------------------
   const [isSpeaking, setIsSpeaking] = useState(false);
+
+  // Explicit New Chat (sidebar): clear session ref without waiting on URL timing.
+  useEffect(() => {
+    const onNewChat = () => {
+      console.log("[Nova] NEW CHAT CREATED (client reset)");
+      activeSidRef.current = "";
+      setMessages([]);
+      setErr(null);
+    };
+    window.addEventListener("nova:new-chat", onNewChat);
+    return () => window.removeEventListener("nova:new-chat", onNewChat);
+  }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    if (!user?.onboarding_completed) {
+      router.replace("/onboarding");
+    }
+  }, [authReady, user?.onboarding_completed, router]);
+
+  useEffect(() => {
+    if (!sid && !briefing) {
+      apiGet("/briefing")
+        .then((data: any) => {
+          if (data?.briefing) setBriefing(data.briefing);
+        })
+        .catch(() => {});
+    }
+  }, [sid]);
 
   function stopSpeak() {
     if (typeof window === "undefined") return;
@@ -359,6 +401,7 @@ export default function Chat() {
   useEffect(() => {
     if (!sid) {
       // ✅ No sid = fresh empty state
+      activeSidRef.current = "";
       setMessages([]);
       setErr(null);
       return;
@@ -368,6 +411,7 @@ export default function Chat() {
 
     async function loadChatWithRetry() {
       setErr(null);
+      console.log("[Nova] FETCH HISTORY SID", sid);
 
       for (const delay of [0, 1500, 3500]) {
         if (delay) await sleep(delay);
@@ -402,22 +446,6 @@ export default function Chat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sid]);
 
-  // ---- Load direction + today checkin (execution header) ----
-  useEffect(() => {
-    (async () => {
-      try {
-        const d = (await fetchDirection()) as DirectionResponse;
-        setDirection(d.title ?? d.direction?.title ?? null);
-      } catch {}
-
-      try {
-        const c = (await fetchTodayCheckin()) as CheckinResponse;
-        setTone(c.tone ?? null);
-        setTodayAction(c.today_action ?? c.checkin?.today_action ?? null);
-      } catch {}
-    })();
-  }, []);
-
   // Prefill from dashboard CTA (/?prefill=...)
   useEffect(() => {
     const prefill = searchParams.get("prefill");
@@ -439,84 +467,200 @@ export default function Chat() {
   }, [messages, loading]);
 
   // --------------------
-  // ✅ send(): create sid only on first real message
+  // ✅ send(): streaming first, then regular POST; create sid on first real message
   // --------------------
   async function send() {
     const text = input.trim();
-    if (!text) return; // 🔒 DO NOTHING if empty
-    if (sendingRef.current) return; // 🔒 HARD LOCK
+    if (!text) return;
+    if (sendingRef.current) return;
 
     sendingRef.current = true;
     setInput("");
     setLoading(true);
+    setBriefing(null);
     setErr(null);
 
-    const effectiveSid = sid || "";
+    const effectiveSid = activeSidRef.current;
 
-    // Optimistic UI
+    // Optimistic UI: add user message
     setMessages((prev) => [...prev, { role: "user", content: text }]);
 
+    const category = detectCategory(text);
+    const contract = responseContract(category);
+    const direction: string | undefined = undefined;
+    const todayAction: string | undefined = undefined;
+    const tone: string | undefined = undefined;
+
+    const requestSid = effectiveSid || generateSessionId();
+    const payload: any = {
+      message: text,
+      system: NOVA_SYSTEM + "\n\n" + contract,
+      context: { direction, todayAction, tone, category },
+      sid: requestSid,
+    };
+
     try {
-      const category = detectCategory(text);
-      const contract = responseContract(category);
+      let streamed = false;
+      try {
+        const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
+        const API_BASE = RAW_BASE.replace(/\/+$/, "") || "http://localhost:8000";
+        const token =
+          (typeof window !== "undefined" &&
+            localStorage.getItem("nova_token")) ||
+          "";
 
-      const payload: any = {
-        message: text,
-        system: NOVA_SYSTEM + "\n\n" + contract,
-        context: { direction, todayAction, tone, category },
-      };
-      
-      // ✅ Explicitly set sid in payload:
-      // - If we have a sid (continuing conversation), use it
-      // - If we DON'T have a sid (new chat), generate a NEW unique one to force backend to create new session
-      payload.sid = effectiveSid || generateSessionId();
+        const streamRes = await fetch(`${API_BASE}/memory/chat/stream`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify(payload),
+        });
 
-      const res: any = await apiPost("/memory/chat", payload);
+        if (streamRes.ok && streamRes.body) {
+          streamed = true;
+          const reader = streamRes.body.getReader();
+          const decoder = new TextDecoder();
+          let assistantText = "";
+          let streamSid = "";
+          let buffer = "";
 
-      if (!sid) {
-        const responseSid =
-          res?.sid ?? res?.session?.sid ?? res?.data?.sid ?? res?.chat?.sid ?? "";
-        if (typeof responseSid === "string" && responseSid.trim()) {
-          router.replace(`/chat?sid=${encodeURIComponent(responseSid)}`);
+          // Add empty assistant message to fill incrementally
+          setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+          setLoading(false); // Hide "thinking" once streaming starts
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split("\n\n");
+            buffer = parts.pop() || "";
+
+            for (const part of parts) {
+              let eventType = "";
+              let dataStr = "";
+
+              for (const line of part.split("\n")) {
+                if (line.startsWith("event: ")) eventType = line.slice(7).trim();
+                else if (line.startsWith("data: ")) dataStr = line.slice(6);
+              }
+
+              if (!dataStr) continue;
+
+              try {
+                const data = JSON.parse(dataStr);
+
+                if (eventType === "token" && data.token) {
+                  assistantText += data.token;
+                  setMessages((prev) => {
+                    const updated = [...prev];
+                    const lastIdx = updated.length - 1;
+                    if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                      updated[lastIdx] = {
+                        ...updated[lastIdx],
+                        content: assistantText,
+                      };
+                    }
+                    return updated;
+                  });
+                } else if (eventType === "done") {
+                  if (data.full_response) assistantText = data.full_response;
+                  streamSid = data.sid || "";
+                  // Final update
+                  setMessages((prev) => {
+                    const updated = [...prev];
+                    const lastIdx = updated.length - 1;
+                    if (lastIdx >= 0 && updated[lastIdx].role === "assistant") {
+                      updated[lastIdx] = {
+                        ...updated[lastIdx],
+                        content: assistantText,
+                      };
+                    }
+                    return updated;
+                  });
+                }
+              } catch {
+                // JSON parse error, skip
+              }
+            }
+          }
+
+          // Update SID
+          if (!effectiveSid && streamSid) {
+            activeSidRef.current = streamSid;
+            router.replace(`/chat?sid=${encodeURIComponent(streamSid)}`);
+          }
         }
+      } catch {
+        streamed = false;
+        setMessages((prev) => {
+          const next = [...prev];
+          if (next.length && next[next.length - 1].role === "assistant") {
+            next.pop();
+          }
+          return next;
+        });
       }
 
-      const full = coerceMessages(res);
-      if (full?.length) {
-        setMessages(full);
-      } else {
-        const assistantText = extractAssistantText(res);
+      // --- Fallback to regular endpoint ---
+      if (!streamed) {
+        const res: any = await apiPost("/memory/chat", payload);
 
-        setMessages((prev) => {
-          const next: Msg[] = [
+        if (isChatApplicationFailure(res)) {
+          const errText =
+            (typeof res?.error === "string" && res.error.trim()) ||
+            (typeof res?.message === "string" && res.message.trim()) ||
+            "Something went wrong.";
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: errText },
+          ]);
+          setErr(errText);
+          return;
+        }
+
+        if (!effectiveSid) {
+          const responseSid =
+            res?.sid ??
+            res?.session?.sid ??
+            res?.data?.sid ??
+            res?.chat?.sid ??
+            "";
+          const nextSid =
+            typeof responseSid === "string" && responseSid.trim()
+              ? responseSid
+              : requestSid;
+          activeSidRef.current = nextSid;
+          router.replace(`/chat?sid=${encodeURIComponent(nextSid)}`);
+        }
+
+        const full = coerceMessages(res);
+        if (full?.length) {
+          setMessages(full);
+        } else {
+          const assistantText = extractAssistantText(res);
+          setMessages((prev) => [
             ...prev,
             {
               role: "assistant",
               content:
-                assistantText || "I’m here. What do you want to work on next?",
+                assistantText ||
+                `Hey ${displayName} 👋 I'm here. What do you want to work on today?`,
             },
-          ];
-
-          if (!didNudgeRef.current && (todayAction || direction)) {
-            next.push({
-              role: "assistant",
-              content: todayAction
-                ? `Quick anchor: your one action today is "${todayAction}". Want me to make it smaller?`
-                : `Quick anchor: your direction is "${direction}". What’s the smallest next step today?`,
-            });
-            didNudgeRef.current = true;
-          }
-
-          return next;
-        });
+          ]);
+        }
       }
     } catch (e: any) {
       setMessages((prev) => [
-        ...prev,
+        ...prev.filter(
+          (m) => !(m.role === "assistant" && m.content === "")
+        ),
         {
           role: "assistant",
           content:
-            "I couldn’t reach the backend. Please hit Retry or refresh the page.",
+            "I couldn't reach the backend. Please hit Retry or refresh the page.",
         },
       ]);
       setErr(e?.message || "Backend not reachable.");
@@ -532,7 +676,6 @@ export default function Chat() {
       await apiPost("/memory/chat/clear", { sid });
       setMessages([]);
       setErr(null);
-      didNudgeRef.current = false;
     } catch (e: any) {
       setErr(e?.message || "Couldn’t clear backend memory.");
     }
@@ -542,8 +685,6 @@ export default function Chat() {
     setMessages([]);
     setInput("");
     setErr(null);
-    didNudgeRef.current = false;
-
     // 2) Clear voice states
     stopSpeak();
     stopVoice();
@@ -570,23 +711,56 @@ export default function Chat() {
           shouldAutoScrollRef.current = distance < 160;
         }}
       >
-        <div className="max-w-2xl mx-auto px-4 py-6 space-y-2">
+        <div className="max-w-4xl mx-auto px-4 py-6 space-y-2">
           {messages.length === 0 && !loading && (
-            <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
-              <NovaHumanLogo size={90} />
-
-              <div className="text-lg font-semibold text-zinc-100">
-                How can I help you today?
+            <div className="flex h-[60vh] flex-col items-center justify-center gap-6 text-center">
+              <NovaHumanLogo size={80} />
+              <div className="text-center text-zinc-400">
+                <h2 className="text-xl font-medium text-zinc-200">
+                  Welcome, {displayName} 👋
+                </h2>
+                <p className="mt-2">
+                  {briefing || "What do you want to work on today?"}
+                </p>
               </div>
-
-              <div className="text-sm text-zinc-400 max-w-sm">
-                You can ask anything — career, money, decisions, or what to do next.
+              <div className="flex flex-wrap justify-center gap-2 max-w-lg mt-2">
+                {[
+                  { emoji: "🔍", text: "Find 3 trending product opportunities" },
+                  { emoji: "✉️", text: "Draft an email to my professor" },
+                  { emoji: "⏰", text: "Remind me to call mom at 5pm" },
+                  { emoji: "🌤️", text: "Weather in New York" },
+                  {
+                    emoji: "💻",
+                    text: "Write a Python function to reverse a string",
+                  },
+                ].map((prompt) => (
+                  <button
+                    key={prompt.text}
+                    type="button"
+                    onClick={() => {
+                      setInput(prompt.text);
+                      setTimeout(() => {
+                        const sendBtn = document.querySelector(
+                          '[title="Send"]'
+                        ) as HTMLButtonElement;
+                        if (sendBtn) sendBtn.click();
+                      }, 100);
+                    }}
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-300 hover:bg-white/10 hover:text-zinc-100 transition-colors"
+                  >
+                    {prompt.emoji} {prompt.text}
+                  </button>
+                ))}
               </div>
             </div>
           )}
 
           {messages
-            .filter((m) => (m?.content ?? "").trim().length > 0)
+            .filter(
+              (m) =>
+                (m?.content ?? "").trim().length > 0 ||
+                (m.role === "assistant" && m.content === "")
+            )
             .map((m, i) => {
               const prev = messages[i - 1];
               const next = messages[i + 1];
@@ -595,19 +769,13 @@ export default function Chat() {
               const prevSame = prev?.role === m.role;
               const nextSame = next?.role === m.role;
 
-              const showAvatar = !isUser && !prevSame;
-
               const bubbleRadius = isUser
                 ? [
                     "rounded-2xl",
                     prevSame ? "rounded-tr-md" : "",
                     nextSame ? "rounded-br-md" : "",
                   ].join(" ")
-                : [
-                    "rounded-2xl",
-                    prevSame ? "rounded-tl-md" : "",
-                    nextSame ? "rounded-bl-md" : "",
-                  ].join(" ");
+                : "";
 
               return (
                 <div key={i}>
@@ -616,40 +784,38 @@ export default function Chat() {
                       isUser ? "justify-end" : "justify-start"
                     } gap-2`}
                   >
-                    {!isUser && (
-                      <div className="w-8">
-                        {showAvatar ? (
-                          <div className="h-8 w-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-zinc-300">
-                            N
-                          </div>
-                        ) : (
-                          <div className="h-8 w-8" />
-                        )}
-                      </div>
-                    )}
-
                     <div
                       className={[
-                        "max-w-[85%] px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap",
-                        bubbleRadius,
+                        "max-w-[85%] text-sm leading-relaxed",
+                        isUser ? `px-4 py-3 ${bubbleRadius}` : "px-4 py-3 rounded-2xl",
                         isUser
-                          ? "bg-blue-600 text-white"
+                          ? "bg-white/5 text-zinc-100 border border-white/10 whitespace-pre-wrap"
                           : "bg-white/5 text-zinc-100 border border-white/10",
-                      ].join(" ")}
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
                     >
-                      {!isUser && m.mode && (
-                        <div className="mb-2 inline-flex items-center rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[11px] font-medium text-zinc-300">
-                          {m.mode.toUpperCase()}
+                      {isUser ? (
+                        m.content
+                      ) : (
+                        <div className="flex flex-row flex-wrap items-baseline gap-x-2 gap-y-1">
+                          {!isUser && (
+                            <span className="text-[11px] font-medium text-zinc-500 mr-2 select-none">
+                              NOVA
+                            </span>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <MarkdownRenderer content={m.content} />
+                          </div>
                         </div>
                       )}
-                      {m.content}
                     </div>
                   </div>
 
                   {!nextSame && m.ts && (
                     <div
                       className={`mt-1 text-[10px] text-zinc-500 ${
-                        isUser ? "text-right pr-2" : "text-left pl-10"
+                        isUser ? "text-right pr-2" : "text-left pl-2"
                       }`}
                     >
                       {new Date(m.ts).toLocaleString()}
@@ -661,10 +827,7 @@ export default function Chat() {
 
           {loading && (
             <div className="flex items-start justify-start">
-              <div className="mr-2 mt-1 h-8 w-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-xs text-zinc-300">
-                N
-              </div>
-              <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm bg-white/5 border border-white/10 text-zinc-300">
+              <div className="max-w-[85%] pt-1 text-sm text-zinc-200">
                 Nova is thinking…
               </div>
             </div>
@@ -676,7 +839,7 @@ export default function Chat() {
 
       {/* ✅ Error + Retry button */}
       {err && (
-        <div className="shrink-0 max-w-2xl mx-auto w-full px-4 py-2 text-xs text-red-400 flex items-center justify-between gap-3">
+        <div className="shrink-0 max-w-4xl mx-auto w-full px-4 py-2 text-xs text-red-400 flex items-center justify-between gap-3">
           <span className="break-words">{err}</span>
           <button
             onClick={() => window.location.reload()}
@@ -688,23 +851,7 @@ export default function Chat() {
       )}
 
       <footer className="shrink-0 border-t border-white/10 bg-black/40 backdrop-blur">
-        <div className="max-w-2xl mx-auto px-4 py-4">
-          {(direction || todayAction) && (
-            <div className="mb-2 text-xs text-zinc-400">
-              {direction ? (
-                <>
-                  Direction: <span className="text-zinc-200">{direction}</span>
-                </>
-              ) : null}
-              {direction && todayAction ? " • " : null}
-              {todayAction ? (
-                <>
-                  Today: <span className="text-zinc-200">{todayAction}</span>
-                </>
-              ) : null}
-            </div>
-          )}
-
+        <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-2">
             <div className="flex-1 flex items-center rounded-2xl border border-white/10 bg-white/5 px-4 py-3 gap-2">
               <input

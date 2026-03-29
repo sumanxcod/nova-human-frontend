@@ -6,9 +6,9 @@
 
 :root {
   /* Background layers */
-  --bg0: #0b0d12;
-  --bg1: #0f1115;
-  --bg2: #12141a;
+  --bg0: #08090d;
+  --bg1: #0a0b0f;
+  --bg2: #0d0f14;
 
   /* Panels */
   --panel: rgba(255, 255, 255, 0.035);
@@ -50,4 +50,59 @@ body {
 
 .nova-muted {
   color: var(--muted);
+}
+
+/* ─── Reminder toast animation ─── */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+/* ─── Nova Logo Pulse Animation ─── */
+@keyframes nova-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 8px rgba(109, 213, 255, 0.3));
+  }
+  50% {
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 20px rgba(109, 213, 255, 0.6));
+  }
+}
+
+@keyframes nova-rotate-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.nova-logo-pulse {
+  animation: nova-pulse 3s ease-in-out infinite;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── Scrollbar styling ─── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }

@@ -1,37 +1,33 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-
-const tabs = [
-  { href: "/", label: "Chat" },
-  { href: "/direction", label: "Direction" },
-  { href: "/habits", label: "Action Plan" },
-  { href: "/checkin", label: "Checkin" },
-  { href: "/dashboard", label: "Dashboard" },
-];
+import { usePathname, useRouter } from "next/navigation";
 
 export default function MobileTabs() {
+  const router = useRouter();
   const path = usePathname();
 
+  const chatActive =
+    path === "/chat" || path === "/" || path.startsWith("/chat/");
+  const profileActive = path.startsWith("/profile");
+
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black/70 backdrop-blur">
-      <div className="mx-auto max-w-xl grid grid-cols-5">
-        {tabs.map((t) => {
-          const active =
-            path === t.href || (t.href !== "/" && path.startsWith(t.href));
-          return (
-            <Link
-              key={t.href}
-              href={t.href}
-              className={`py-3 text-center text-[12px] ${
-                active ? "text-white" : "text-zinc-400"
-              }`}
-            >
-              {t.label}
-            </Link>
-          );
-        })}
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-black">
+      <div className="flex justify-around py-2">
+        <button
+          type="button"
+          onClick={() => router.push("/chat")}
+          className={`text-sm ${chatActive ? "text-white" : "text-zinc-400"}`}
+        >
+          Chat
+        </button>
+
+        <button
+          type="button"
+          onClick={() => router.push("/profile")}
+          className={`text-sm ${profileActive ? "text-white" : "text-zinc-400"}`}
+        >
+          Profile
+        </button>
       </div>
     </nav>
   );

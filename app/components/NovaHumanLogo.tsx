@@ -8,12 +8,12 @@ export default function NovaHumanLogo({
   className?: string;
 }) {
   return (
+    <div className={`nova-logo-pulse ${className}`}>
     <svg
       width={size}
       height={size}
       viewBox="0 0 200 200"
       xmlns="http://www.w3.org/2000/svg"
-      className={className}
     >
       <defs>
         <filter id="glow">
@@ -110,5 +110,6 @@ export default function NovaHumanLogo({
         <rect x="40.9" y="40.9" width="6" height="6" rx="1" fill="#6dd5ff" />
       </g>
     </svg>
+    </div>
   );
 }

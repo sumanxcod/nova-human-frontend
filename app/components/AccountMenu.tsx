@@ -72,15 +72,9 @@ export default function AccountMenu() {
     };
   }, []);
 
+  // Logged-out users: no header Login — use sidebar footer Login instead.
   if (!authReady || !isAuthed) {
-    return (
-      <button
-        onClick={() => router.push("/login")}
-        className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-zinc-100 hover:bg-white/10"
-      >
-        Login
-      </button>
-    );
+    return null;
   }
 
   return (

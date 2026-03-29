@@ -1,7 +1,7 @@
 import { getToken } from "./auth";
 
 const RAW_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "";
-const API_BASE = RAW_BASE.replace(/\/+$/, "") || "http://localhost:8000";
+export const API_BASE = RAW_BASE.replace(/\/+$/, "") || "http://localhost:8000";
 
 type ApiError = Error & { status?: number; bodyText?: string };
 
@@ -27,19 +27,34 @@ export async function apiFetch<T>(
   }
 
   const res = await fetch(url, { ...options, headers });
+  const text = await res.text().catch(() => "");
 
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
     const err: ApiError = new Error(text || res.statusText);
     err.status = res.status;
     err.bodyText = text;
     throw err;
   }
 
-  const ct = res.headers.get("content-type") || "";
-  if (!ct.includes("application/json")) return undefined as T;
+  const trimmed = text.trim();
+  if (!trimmed) return {} as T;
 
-  return (await res.json()) as T;
+  // Parse JSON bodies even when Content-Type omits application/json (common with proxies).
+  const first = trimmed[0];
+  if (first !== "{" && first !== "[") {
+    return undefined as T;
+  }
+
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    const err: ApiError = new Error(
+      trimmed.length > 200 ? `${trimmed.slice(0, 200)}…` : trimmed || "Invalid JSON response"
+    );
+    err.status = res.status;
+    err.bodyText = text;
+    throw err;
+  }
 }
 
 export function apiGet<T>(path: string) {
