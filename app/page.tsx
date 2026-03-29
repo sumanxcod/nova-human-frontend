@@ -1,6 +1,23 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/providers/AuthProvider";
 
 export default function Page() {
+  const router = useRouter();
+  const { authReady, isAuthed } = useAuth();
+
+  useEffect(() => {
+    if (!authReady) return;
+    if (isAuthed) router.replace("/chat");
+  }, [authReady, isAuthed, router]);
+
+  if (!authReady) return null;
+
+  if (isAuthed) return null;
+
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
       <div className="max-w-xl rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
