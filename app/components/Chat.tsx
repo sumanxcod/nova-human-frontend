@@ -249,16 +249,9 @@ export default function Chat() {
     ];
   }, [user]);
 
-  // ✅ SID comes ONLY from URL (no auto create on mount)
-  const sid = searchParams.get("sid") || "";
-  const activeSidRef = useRef<string>(searchParams.get("sid") || "");
-
-  useEffect(() => {
-    const urlSid = searchParams.get("sid") || "";
-    if (urlSid) {
-      activeSidRef.current = urlSid;
-    }
-  }, [searchParams]);
+  // ✅ SID comes from URL and is mirrored into local state for reliable reloading
+  const [sid, setSid] = useState<string | null>(null);
+  const activeSidRef = useRef<string>("");
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -463,55 +456,40 @@ export default function Chat() {
     return new Promise((r) => setTimeout(r, ms));
   }
 
-  // --------------------
-  // ✅ Load chat history with retry (sid-based)
-  // --------------------
+  async function loadMessages(targetSid: string) {
+    setMessages([]);
+    setErr(null);
+
+    try {
+      await wakeBackendOnce();
+      const data = await apiGet(`/memory/chat?sid=${encodeURIComponent(targetSid)}`);
+      const list = coerceMessages(data);
+      setMessages(list?.length ? list : []);
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
+    } catch (e: any) {
+      setErr(e?.message || "Could not load this conversation.");
+    }
+  }
+
+  // Sync URL sid -> local sid state
+  useEffect(() => {
+    const nextSid = searchParams.get("sid");
+    setSid(nextSid || null);
+    activeSidRef.current = nextSid || "";
+  }, [searchParams]);
+
+  // Load conversation whenever sid changes
   useEffect(() => {
     if (!sid) {
-      // ✅ No sid = fresh empty state
       activeSidRef.current = "";
       setMessages([]);
       setErr(null);
       return;
     }
 
-    let cancelled = false;
-
-    async function loadChatWithRetry() {
-      setErr(null);
-      console.log("[Nova] FETCH HISTORY SID", sid);
-
-      for (const delay of [0, 1500, 3500]) {
-        if (delay) await sleep(delay);
-        if (cancelled) return;
-
-        try {
-          await wakeBackendOnce();
-
-          const data = await apiGet(
-            `/memory/chat?sid=${encodeURIComponent(sid)}`
-          );
-          const list = coerceMessages(data);
-
-          if (cancelled) return;
-          setMessages(list?.length ? list : []);
-          setErr(null);
-          return;
-        } catch (e: any) {
-          if (cancelled) return;
-          setErr(
-            delay === 3500 ? (e?.message || String(e)) : "Waking backend… retrying…"
-          );
-        }
-      }
-    }
-
-    loadChatWithRetry();
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    void loadMessages(sid);
   }, [sid]);
 
   // Prefill from dashboard CTA (/?prefill=...)

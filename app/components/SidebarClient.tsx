@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import Sidebar from "./Sidebar";
 function SidebarContent() {
   return <Sidebar />;
@@ -10,10 +10,12 @@ export default function SidebarClient() {
   const [open, setOpen] = useState(false);
   const [startX, setStartX] = useState(0);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const sid = searchParams.get("sid") || "";
 
   useEffect(() => {
     setOpen(false);
-  }, [pathname]);
+  }, [pathname, sid]);
 
   return (
     <>
