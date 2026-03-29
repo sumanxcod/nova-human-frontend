@@ -9,6 +9,10 @@ type User = {
   email?: string;
   name?: string;
   onboarding_completed?: boolean;
+  /** When returned by API, used for personalized chat suggestions */
+  goal?: string;
+  situation?: string;
+  focus?: string;
 };
 
 type AuthState = {

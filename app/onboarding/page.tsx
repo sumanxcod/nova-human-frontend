@@ -36,17 +36,19 @@ export default function OnboardingPage() {
     setSaving(true);
 
     try {
-      await apiFetch("/user/onboarding", {
+      const data = await apiFetch<{ status?: string }>("/user/onboarding", {
         method: "POST",
         body: JSON.stringify({ goal, situation, focus }),
       });
+      console.log("onboarding success:", data);
 
       try {
         const me = await apiFetch<Me>("/auth/me");
         if (token) {
           setAuthToken(token, me || user || null);
         }
-      } catch {
+      } catch (meErr) {
+        console.error("onboarding: refresh /auth/me failed:", meErr);
         if (token) {
           setAuthToken(token, {
             ...(user || {}),
@@ -57,6 +59,7 @@ export default function OnboardingPage() {
 
       router.push("/chat");
     } catch (e: any) {
+      console.error("onboarding error:", e);
       setError(e?.message || "Could not save onboarding.");
     } finally {
       setSaving(false);

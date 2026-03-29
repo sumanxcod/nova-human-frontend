@@ -50,10 +50,11 @@ export default function ProfilePage() {
     };
   }, []);
 
-  async function saveEmail(e: React.FormEvent) {
+  async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
     if (!me) return;
 
+    const nextName = name.trim();
     const nextEmail = email.trim();
     if (!nextEmail) {
       setErr("Email is required.");
@@ -66,21 +67,20 @@ export default function ProfilePage() {
     setMsg(null);
 
     try {
-      const updated = await apiFetch<Partial<Me>>("/auth/me", {
-        method: "PATCH",
-        body: JSON.stringify({ email: nextEmail }),
+      const res = await apiFetch<{ status?: string }>("/user/profile", {
+        method: "PUT",
+        body: JSON.stringify({ name: nextName || undefined, email: nextEmail }),
       });
+      console.log("profile save success:", res);
 
-      const resolvedEmail =
-        typeof updated?.email === "string" && updated.email.trim()
-          ? updated.email
-          : nextEmail;
-
-      setMe((prev) => (prev ? { ...prev, email: resolvedEmail } : prev));
-      setEmail(resolvedEmail);
-      setMsg("Email updated.");
+      const updated = await apiFetch<Me>("/auth/me");
+      setMe(updated);
+      setName(updated?.name || "");
+      setEmail(updated?.email || nextEmail);
+      setMsg("Profile updated.");
     } catch (error: any) {
-      setErr(error?.message || "Could not update email.");
+      console.error("profile save error:", error);
+      setErr(error?.message || "Could not update profile.");
     } finally {
       setSaving(false);
     }
@@ -104,15 +104,22 @@ export default function ProfilePage() {
           )}
 
           {!loading && me && (
-            <>
-              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+            <form
+              onSubmit={saveProfile}
+              className="space-y-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3"
+            >
+              <div>
                 <div className="text-xs text-zinc-400">Name</div>
-                <div className="mt-1 text-zinc-100">{name || "—"}</div>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoComplete="name"
+                  className="mt-2 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-zinc-100 placeholder:text-zinc-500 outline-none"
+                  placeholder="Your name"
+                />
               </div>
-              <form
-                onSubmit={saveEmail}
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3"
-              >
+              <div>
                 <div className="text-xs text-zinc-400">Email</div>
                 <input
                   type="email"
@@ -122,27 +129,32 @@ export default function ProfilePage() {
                   placeholder="you@example.com"
                   required
                 />
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-100 hover:bg-white/10 disabled:opacity-50"
-                  >
-                    {saving ? "Saving..." : "Save"}
-                  </button>
-                  {msg && <div className="text-xs text-green-400">{msg}</div>}
-                </div>
-                {err && <div className="mt-2 text-xs text-red-400">{err}</div>}
-              </form>
-              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
-                <div className="text-xs text-zinc-400">Created at</div>
-                <div className="mt-1 text-zinc-100">{me.created_at || "—"}</div>
               </div>
-            </>
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-100 hover:bg-white/10 disabled:opacity-50"
+                >
+                  {saving ? "Saving..." : "Save"}
+                </button>
+                {msg && <div className="text-xs text-green-400">{msg}</div>}
+              </div>
+              {err && <div className="text-xs text-red-400">{err}</div>}
+            </form>
+          )}
+
+          {!loading && me && (
+            <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+              <div className="text-xs text-zinc-400">Created at</div>
+              <div className="mt-1 text-zinc-100">{me.created_at || "—"}</div>
+            </div>
           )}
         </div>
 
-        <div className="mt-6 text-center text-xs text-zinc-500">Protected by Nova Human</div>
+        <div className="mt-6 text-center text-xs text-zinc-500">
+          Protected by Nova Human
+        </div>
       </div>
     </div>
   );

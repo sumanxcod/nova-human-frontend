@@ -217,11 +217,11 @@ export default function Sidebar() {
             >
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-full bg-white/10 flex items-center justify-center">
-                  {user?.name?.[0] || "N"}
+                  {user?.name?.[0] || "U"}
                 </div>
                 <div>
                   <div className="text-sm font-medium">
-                    {user?.name || user?.email || "User"}
+                    {user?.name ?? "User"}
                   </div>
                   <div className="text-xs text-zinc-500">Free Plan</div>
                 </div>
@@ -253,6 +253,14 @@ export default function Sidebar() {
                   className="w-full text-left px-3 py-2 rounded hover:bg-white/10"
                 >
                   About
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => router.push("/upgrade")}
+                  className="w-full text-left px-3 py-2 rounded hover:bg-white/10"
+                >
+                  Upgrade Plan
                 </button>
 
                 <button

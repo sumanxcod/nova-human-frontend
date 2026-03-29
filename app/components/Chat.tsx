@@ -1,17 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { apiGet, apiPost } from "../lib/api";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { API_BASE, apiGet, apiPost } from "../lib/api";
+import { getToken } from "../lib/auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import NovaHumanLogo from "./NovaHumanLogo";
 import MarkdownRenderer from "./MarkdownRenderer";
 import { useAuth } from "../providers/AuthProvider";
+
+type FileTaskResult = {
+  issues?: string[];
+  improvements?: string[];
+  improved_content?: string;
+  recommendation?: string;
+};
 
 export type Msg = {
   role: "user" | "assistant";
   content: string;
   ts?: string;
   mode?: string;
+  fileTaskResult?: FileTaskResult;
 };
 
 function generateSessionId(): string {
@@ -212,6 +221,34 @@ export default function Chat() {
   const displayName =
     user?.name?.split(" ")[0] || user?.email?.split("@")[0] || "there";
 
+  const suggestionChips = useMemo(() => {
+    const goal = (user?.goal ?? "").trim();
+    const focus = (user?.focus ?? "").trim();
+
+    if (user?.onboarding_completed && goal && focus) {
+      return [
+        { emoji: "✨", text: `Help me with ${goal}` },
+        { emoji: "🎯", text: `What should I do about ${focus}?` },
+        { emoji: "📋", text: "Give me a plan based on my situation" },
+      ];
+    }
+
+    if (user?.onboarding_completed) {
+      return [
+        { emoji: "🧭", text: "Help me find a clear path forward" },
+        { emoji: "🎯", text: "What should I focus on first?" },
+        { emoji: "📋", text: "Give me a simple plan to improve my life" },
+        { emoji: "💵", text: "Help me start making money" },
+      ];
+    }
+
+    return [
+      { emoji: "👋", text: "What can you help me with?" },
+      { emoji: "🚀", text: "Help me get started" },
+      { emoji: "🌿", text: "I feel stuck, guide me" },
+    ];
+  }, [user]);
+
   // ✅ SID comes ONLY from URL (no auto create on mount)
   const sid = searchParams.get("sid") || "";
   const activeSidRef = useRef<string>(searchParams.get("sid") || "");
@@ -228,6 +265,13 @@ export default function Chat() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [briefing, setBriefing] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [fileContent, setFileContent] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const menuWrapRef = useRef<HTMLDivElement | null>(null);
 
   const sendingRef = useRef(false);
 
@@ -249,6 +293,8 @@ export default function Chat() {
       activeSidRef.current = "";
       setMessages([]);
       setErr(null);
+      setFile(null);
+      setFileContent("");
     };
     window.addEventListener("nova:new-chat", onNewChat);
     return () => window.removeEventListener("nova:new-chat", onNewChat);
@@ -366,6 +412,17 @@ export default function Chat() {
     }
   }
 
+  async function handleCamera() {
+    if (typeof window === "undefined") return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach((track) => track.stop());
+    } catch {
+      // If denied/unsupported, fallback to camera input trigger.
+    }
+    cameraInputRef.current?.click();
+  }
+
   useEffect(() => {
     return () => {
       try {
@@ -373,6 +430,17 @@ export default function Chat() {
       } catch {}
       stopSpeak();
     };
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (menuWrapRef.current?.contains(target)) return;
+      setShowMenu(false);
+    };
+
+    window.addEventListener("click", handler);
+    return () => window.removeEventListener("click", handler);
   }, []);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -466,13 +534,152 @@ export default function Chat() {
     });
   }, [messages, loading]);
 
+  const renderStructured = (data: FileTaskResult) => {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-red-400 font-semibold">Issues</h3>
+          <ul className="text-sm list-disc ml-5">
+            {(data.issues && data.issues.length ? data.issues : ["No issues detected"]).map((i: string, idx: number) => (
+              <li key={idx}>{i}</li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="text-green-400 font-semibold">Improvements</h3>
+          <ul className="text-sm list-disc ml-5">
+            {(data.improvements && data.improvements.length ? data.improvements : ["No specific improvements provided"]).map((i: string, idx: number) => (
+              <li key={idx}>{i}</li>
+            ))}
+          </ul>
+        </div>
+
+        <div>
+          <h3 className="text-blue-400 font-semibold">Final Version</h3>
+          <pre className="bg-black/40 p-3 rounded text-xs overflow-auto whitespace-pre-wrap">
+            {data.improved_content || "—"}
+          </pre>
+        </div>
+
+        <div>
+          <h3 className="text-yellow-400 font-semibold">Recommendation</h3>
+          <p className="text-sm">{data.recommendation || "—"}</p>
+        </div>
+      </div>
+    );
+  };
+
+  function pushAssistantFromData(data: any) {
+    if (data?.file_task_result) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Structured result",
+          fileTaskResult: data.file_task_result,
+        },
+      ]);
+      return;
+    }
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "assistant",
+        content: data?.answer || data?.content || "No response",
+      },
+    ]);
+  }
+
+  const handleFile = async (selectedFile: File | undefined) => {
+    if (!selectedFile) return;
+    setFile(selectedFile);
+    setUploading(true);
+    setErr(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      const token = getToken();
+      const res = await fetch(`${API_BASE}/agent/upload`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      const raw = await res.text();
+      if (!res.ok) throw new Error(raw || res.statusText);
+      const data = JSON.parse(raw);
+      setFileContent(typeof data.content === "string" ? data.content : "");
+    } catch (e: any) {
+      setErr(e?.message || "Upload failed.");
+      setFile(null);
+      setFileContent("");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  async function sendFileTask(message: string): Promise<any> {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/agent/file-task`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        message,
+        user_message: message,
+        file_content: fileContent || null,
+        content: fileContent,
+      }),
+    });
+    const raw = await res.text();
+    if (!res.ok) throw new Error(raw || res.statusText);
+    return JSON.parse(raw);
+  }
+
   // --------------------
-  // ✅ send(): streaming first, then regular POST; create sid on first real message
+  // ✅ send(): file agent → streaming first → regular POST; create sid on first real message
   // --------------------
   async function send() {
-    const text = input.trim();
+    const typed = input.trim();
+    const hasFile = Boolean(file || fileContent);
+    const text = typed || (hasFile ? "Please analyze the attached file." : "");
     if (!text) return;
     if (sendingRef.current) return;
+    if (uploading) return;
+
+    // Attached file: agent structured response (no chat stream)
+    if (hasFile) {
+      sendingRef.current = true;
+      setInput("");
+      setLoading(true);
+      setBriefing(null);
+      setErr(null);
+
+      setMessages((prev) => [...prev, { role: "user", content: text }]);
+
+      try {
+        const result = await sendFileTask(text);
+        pushAssistantFromData(result);
+        setFile(null);
+        setFileContent("");
+      } catch (e: any) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: e?.message || "Could not process the file task.",
+          },
+        ]);
+        setErr(e?.message || "File task failed.");
+      } finally {
+        sendingRef.current = false;
+        setLoading(false);
+      }
+      return;
+    }
 
     sendingRef.current = true;
     setInput("");
@@ -639,6 +846,10 @@ export default function Chat() {
         const full = coerceMessages(res);
         if (full?.length) {
           setMessages(full);
+        } else if (res?.file_task_result) {
+          pushAssistantFromData(res);
+          setFile(null);
+          setFileContent("");
         } else {
           const assistantText = extractAssistantText(res);
           setMessages((prev) => [
@@ -685,6 +896,8 @@ export default function Chat() {
     setMessages([]);
     setInput("");
     setErr(null);
+    setFile(null);
+    setFileContent("");
     // 2) Clear voice states
     stopSpeak();
     stopVoice();
@@ -724,16 +937,7 @@ export default function Chat() {
                 </p>
               </div>
               <div className="flex flex-wrap justify-center gap-2 max-w-lg mt-2">
-                {[
-                  { emoji: "🔍", text: "Find 3 trending product opportunities" },
-                  { emoji: "✉️", text: "Draft an email to my professor" },
-                  { emoji: "⏰", text: "Remind me to call mom at 5pm" },
-                  { emoji: "🌤️", text: "Weather in New York" },
-                  {
-                    emoji: "💻",
-                    text: "Write a Python function to reverse a string",
-                  },
-                ].map((prompt) => (
+                {suggestionChips.map((prompt) => (
                   <button
                     key={prompt.text}
                     type="button"
@@ -805,7 +1009,11 @@ export default function Chat() {
                             </span>
                           )}
                           <div className="min-w-0 flex-1">
-                            <MarkdownRenderer content={m.content} />
+                            {m.fileTaskResult ? (
+                              renderStructured(m.fileTaskResult)
+                            ) : (
+                              <MarkdownRenderer content={m.content} />
+                            )}
                           </div>
                         </div>
                       )}
@@ -840,20 +1048,110 @@ export default function Chat() {
       {/* ✅ Error + Retry button */}
       {err && (
         <div className="shrink-0 max-w-4xl mx-auto w-full px-4 py-2 text-xs text-red-400 flex items-center justify-between gap-3">
-          <span className="break-words">{err}</span>
-          <button
-            onClick={() => window.location.reload()}
-            className="rounded-lg bg-white/10 border border-white/10 px-3 py-1 text-xs text-zinc-100"
-          >
-            Retry
-          </button>
+          <span className="break-words">
+            {err.toLowerCase().includes("free limit reached")
+              ? "Upgrade to continue"
+              : err}
+          </span>
+          {err.toLowerCase().includes("free limit reached") ? (
+            <button
+              onClick={() => router.push("/upgrade")}
+              className="rounded-lg bg-white text-black px-3 py-1 text-xs"
+            >
+              Upgrade
+            </button>
+          ) : (
+            <button
+              onClick={() => window.location.reload()}
+              className="rounded-lg bg-white/10 border border-white/10 px-3 py-1 text-xs text-zinc-100"
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 
       <footer className="shrink-0 border-t border-white/10 bg-black/40 backdrop-blur">
         <div className="max-w-4xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-2">
-            <div className="flex-1 flex items-center rounded-2xl border border-white/10 bg-white/5 px-4 py-3 gap-2">
+          <div className="flex flex-col gap-2">
+            {file && (
+              <div className="flex items-center justify-between gap-2 text-xs text-zinc-400 px-1">
+                <span>
+                  Attached: {file.name}
+                  {uploading ? " (reading…)" : ""}
+                </span>
+                <button
+                  type="button"
+                  className="text-zinc-500 hover:text-zinc-300"
+                  onClick={() => {
+                    setFile(null);
+                    setFileContent("");
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".txt,.pdf,.jpg,.jpeg,.png"
+              className="hidden"
+              disabled={uploading}
+              onChange={(e) => void handleFile(e.target.files?.[0])}
+            />
+
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={uploading}
+              onChange={(e) => void handleFile(e.target.files?.[0])}
+            />
+
+            <div
+              ref={menuWrapRef}
+              className="relative flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-900 px-3 py-2"
+            >
+              {showMenu && (
+                <div className="absolute bottom-14 left-2 z-20 w-40 rounded-lg border border-white/10 bg-zinc-900 p-2 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fileInputRef.current?.click();
+                      setShowMenu(false);
+                    }}
+                    className="w-full rounded px-3 py-2 text-left text-sm text-zinc-200 hover:bg-white/10"
+                  >
+                    📎 Upload file
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleCamera();
+                      setShowMenu(false);
+                    }}
+                    className="w-full rounded px-3 py-2 text-left text-sm text-zinc-200 hover:bg-white/10"
+                  >
+                    📷 Take photo
+                  </button>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowMenu((prev) => !prev)}
+                disabled={uploading || loading}
+                className="shrink-0 rounded-lg px-2 text-lg text-zinc-300 hover:bg-white/10 hover:text-zinc-100 disabled:opacity-50"
+                title="More actions"
+              >
+                +
+              </button>
+
+              <div className="flex-1 flex items-center gap-2">
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -866,100 +1164,60 @@ export default function Chat() {
                 placeholder="Type your message…"
                 className="flex-1 bg-transparent text-[16px] text-zinc-100 placeholder:text-zinc-500 outline-none"
               />
+              </div>
 
-              {input.trim() && (
-                <button
-                  onClick={send}
-                  disabled={loading}
-                  className="h-8 w-8 rounded-lg text-zinc-100 hover:bg-white/10 disabled:opacity-50 flex items-center justify-center shrink-0"
-                  title="Send"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M5 12h13M13 6l6 6-6 6"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={toggleVoice}
+                disabled={loading}
+                className={`h-8 w-8 shrink-0 rounded-lg flex items-center justify-center ${
+                  isListening ? "bg-amber-300 text-zinc-900" : "text-zinc-300 hover:bg-white/10 hover:text-zinc-100"
+                }`}
+                title={isListening ? "Stop voice input" : "Start voice input"}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M19 11a7 7 0 0 1-14 0"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M12 18v3"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                onClick={send}
+                disabled={loading || uploading || (!input.trim() && !file && !fileContent)}
+                className="h-8 w-8 shrink-0 rounded-lg text-zinc-100 hover:bg-white/10 disabled:opacity-50 flex items-center justify-center"
+                title="Send"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M5 12h13M13 6l6 6-6 6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
             </div>
-
-            <button
-              type="button"
-              onClick={toggleVoice}
-              className={`h-11 w-11 rounded-2xl border border-white/10 flex items-center justify-center ${
-                isListening ? "bg-amber-300 text-zinc-900" : "bg-white/10 text-zinc-100 hover:bg-white/15"
-              }`}
-              title={isListening ? "Click to stop" : "Click to talk"}
-            >
-              {/* Mic icon */}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M19 11a7 7 0 0 1-14 0"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M12 18v3"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                // Speak the most recent assistant message
-                const last = [...messages].reverse().find((m) => m.role === "assistant");
-                if (!last?.content) return;
-                if (isSpeaking) stopSpeak();
-                else speak(last.content);
-              }}
-              className={`h-11 w-11 rounded-2xl border border-white/10 flex items-center justify-center ${
-                isSpeaking ? "bg-amber-300 text-zinc-900" : "bg-white/10 text-zinc-100 hover:bg-white/15"
-              }`}
-              title={isSpeaking ? "Stop" : "Speak last reply"}
-            >
-              {/* Speaker icon */}
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M11 5 6 9H3v6h3l5 4V5Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M15 9a3 3 0 0 1 0 6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M17.5 6.5a6 6 0 0 1 0 11"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
           </div>
 
           {/* <button onClick={clearChat} className="mt-2 text-xs underline text-zinc-400">Clear chat</button> */}
