@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE, apiGet, apiPost } from "../lib/api";
+import {
+  detectSafetyFromMessage,
+  fetchSafetyDecision,
+  type SafetyDecision,
+} from "../lib/safety";
 import { getToken } from "../lib/auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import NovaHumanLogo from "./NovaHumanLogo";
@@ -21,6 +26,12 @@ export type Msg = {
   ts?: string;
   mode?: string;
   fileTaskResult?: FileTaskResult;
+};
+
+type SafetyCardEntry = {
+  id: string;
+  decision?: SafetyDecision;
+  error?: string;
 };
 
 function generateSessionId(): string {
@@ -213,6 +224,76 @@ function isChatApplicationFailure(res: any): boolean {
   return res.ok === false;
 }
 
+const NOVA_SECTION_TITLES = [
+  "Current Focus",
+  "Your Situation",
+  "What Actually Matters",
+  "Your Next Step",
+  "Tomorrow Morning",
+  "7-Day Plan",
+];
+
+type ParsedSection = {
+  title: string;
+  body: string;
+};
+
+function parseNovaSections(content: string): ParsedSection[] {
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  const sections: ParsedSection[] = [];
+  let currentTitle: string | null = null;
+  let bucket: string[] = [];
+
+  const flush = () => {
+    if (!currentTitle) return;
+    const body = bucket.join("\n").trim();
+    if (body) sections.push({ title: currentTitle, body });
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    const normalized = line
+      .replace(/^[#>*\-\s]+/, "")
+      .replace(/^\*\*(.+)\*\*$/, "$1")
+      .replace(/:$/, "")
+      .trim();
+
+    const matchedTitle = NOVA_SECTION_TITLES.find(
+      (title) => normalized.toLowerCase() === title.toLowerCase()
+    );
+
+    if (matchedTitle) {
+      flush();
+      currentTitle = matchedTitle;
+      bucket = [];
+      continue;
+    }
+
+    if (currentTitle) {
+      bucket.push(rawLine);
+    }
+  }
+
+  flush();
+  return sections;
+}
+
+function extractNextStepText(content: string): string {
+  const sections = parseNovaSections(content);
+  const nextStep = sections.find(
+    (section) => section.title.toLowerCase() === "your next step"
+  );
+
+  if (!nextStep) return "";
+
+  const firstLine = nextStep.body
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean);
+
+  return firstLine || nextStep.body.trim();
+}
+
 export default function Chat() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -227,25 +308,21 @@ export default function Chat() {
 
     if (user?.onboarding_completed && goal && focus) {
       return [
-        { emoji: "✨", text: `Help me with ${goal}` },
-        { emoji: "🎯", text: `What should I do about ${focus}?` },
-        { emoji: "📋", text: "Give me a plan based on my situation" },
-      ];
-    }
-
-    if (user?.onboarding_completed) {
-      return [
-        { emoji: "🧭", text: "Help me find a clear path forward" },
-        { emoji: "🎯", text: "What should I focus on first?" },
-        { emoji: "📋", text: "Give me a simple plan to improve my life" },
-        { emoji: "💵", text: "Help me start making money" },
+        `I feel stuck and need direction around ${goal}`,
+        `Help me figure out what to focus on about ${focus}`,
+        "I feel overwhelmed and need a plan",
+        "I need a clear next step",
       ];
     }
 
     return [
-      { emoji: "👋", text: "What can you help me with?" },
-      { emoji: "🚀", text: "Help me get started" },
-      { emoji: "🌿", text: "I feel stuck, guide me" },
+      "I feel stuck and need direction",
+      "Help me figure out what to focus on",
+      "I need to fix my life step by step",
+      "I feel overwhelmed and need a plan",
+      "I need to stop wasting time",
+      "I need to get disciplined again",
+      "I need a clear next step",
     ];
   }, [user]);
 
@@ -254,6 +331,7 @@ export default function Chat() {
   const activeSidRef = useRef<string>("");
 
   const [messages, setMessages] = useState<Msg[]>([]);
+  const [safetyCards, setSafetyCards] = useState<SafetyCardEntry[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -262,6 +340,9 @@ export default function Chat() {
   const [fileContent, setFileContent] = useState("");
   const [uploading, setUploading] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [copiedNextStepKey, setCopiedNextStepKey] = useState<string | null>(null);
+  const [savedPlanKey, setSavedPlanKey] = useState<string | null>(null);
+  const [currentFocus, setCurrentFocus] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const menuWrapRef = useRef<HTMLDivElement | null>(null);
@@ -285,6 +366,7 @@ export default function Chat() {
       console.log("[Nova] NEW CHAT CREATED (client reset)");
       activeSidRef.current = "";
       setMessages([]);
+      setSafetyCards([]);
       setErr(null);
       setFile(null);
       setFileContent("");
@@ -405,6 +487,39 @@ export default function Chat() {
     }
   }
 
+  function triggerPrompt(prompt: string) {
+    setInput(prompt);
+    setTimeout(() => {
+      const sendBtn = document.querySelector('[title="Send"]') as HTMLButtonElement | null;
+      if (sendBtn) sendBtn.click();
+    }, 80);
+  }
+
+  async function copyNextStep(text: string, key: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedNextStepKey(key);
+      setTimeout(() => setCopiedNextStepKey((prev) => (prev === key ? null : prev)), 1200);
+    } catch {
+      setErr("Couldn't copy next step.");
+    }
+  }
+
+  function savePlan(text: string, key: string) {
+    try {
+      const payload = {
+        sid,
+        text,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem("nova_saved_plan", JSON.stringify(payload));
+      setSavedPlanKey(key);
+      setTimeout(() => setSavedPlanKey((prev) => (prev === key ? null : prev)), 1200);
+    } catch {
+      setErr("Couldn't save plan.");
+    }
+  }
+
   async function handleCamera() {
     if (typeof window === "undefined") return;
     try {
@@ -434,6 +549,12 @@ export default function Chat() {
 
     window.addEventListener("click", handler);
     return () => window.removeEventListener("click", handler);
+  }, []);
+
+  useEffect(() => {
+    try {
+      setCurrentFocus(localStorage.getItem("nova_current_focus") || "");
+    } catch {}
   }, []);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -511,6 +632,24 @@ export default function Chat() {
       behavior: isMobile ? "auto" : "smooth",
     });
   }, [messages, loading]);
+
+  const latestNextStep = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message.role !== "assistant" || message.fileTaskResult) continue;
+      const nextStep = extractNextStepText(message.content || "");
+      if (nextStep) return nextStep;
+    }
+    return "";
+  }, [messages]);
+
+  useEffect(() => {
+    if (!latestNextStep) return;
+    setCurrentFocus(latestNextStep);
+    try {
+      localStorage.setItem("nova_current_focus", latestNextStep);
+    } catch {}
+  }, [latestNextStep]);
 
   const renderStructured = (data: FileTaskResult) => {
     return (
@@ -618,6 +757,29 @@ export default function Chat() {
   }
 
   // --------------------
+  // Safety Mode (deterministic backend check)
+  // --------------------
+  function maybeTriggerSafetyCheck(text: string) {
+    const payload = detectSafetyFromMessage(text);
+    if (!payload) return;
+
+    const cardId = `safety-${Date.now()}`;
+    void fetchSafetyDecision(payload)
+      .then((decision) => {
+        setSafetyCards((prev) => [...prev, { id: cardId, decision }]);
+      })
+      .catch((e) => {
+        setSafetyCards((prev) => [
+          ...prev,
+          {
+            id: cardId,
+            error: e instanceof Error ? e.message : "Safety check unavailable.",
+          },
+        ]);
+      });
+  }
+
+  // --------------------
   // ✅ send(): file agent → streaming first → regular POST; create sid on first real message
   // --------------------
   async function send() {
@@ -637,6 +799,7 @@ export default function Chat() {
       setErr(null);
 
       setMessages((prev) => [...prev, { role: "user", content: text }]);
+      maybeTriggerSafetyCheck(text);
 
       try {
         const result = await sendFileTask(text);
@@ -669,6 +832,7 @@ export default function Chat() {
 
     // Optimistic UI: add user message
     setMessages((prev) => [...prev, { role: "user", content: text }]);
+    maybeTriggerSafetyCheck(text);
 
     const category = detectCategory(text);
     const contract = responseContract(category);
@@ -903,6 +1067,36 @@ export default function Chat() {
         }}
       >
         <div className="max-w-4xl mx-auto px-4 py-6 space-y-2">
+          {currentFocus && (
+            <div className="mb-3 rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-300/90">
+                Current Focus
+              </div>
+              <div className="mt-1 text-sm text-zinc-100">{currentFocus}</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => triggerPrompt(`My current focus is: ${currentFocus}\n\nHelp me execute this now.`)}
+                  className="rounded-md border border-white/15 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10"
+                >
+                  Continue focus
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentFocus("");
+                    try {
+                      localStorage.removeItem("nova_current_focus");
+                    } catch {}
+                  }}
+                  className="rounded-md border border-white/15 px-2 py-1 text-xs text-zinc-300 hover:bg-white/10"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+
           {messages.length === 0 && !loading && (
             <div className="flex h-[60vh] flex-col items-center justify-center gap-6 text-center">
               <NovaHumanLogo size={80} />
@@ -913,24 +1107,19 @@ export default function Chat() {
                 <p className="mt-2">
                   {briefing || "What do you want to work on today?"}
                 </p>
+                <p className="mt-3 text-sm text-zinc-500">
+                  Nova helps you get clear, choose what matters, and take the next real step.
+                </p>
               </div>
               <div className="flex flex-wrap justify-center gap-2 max-w-lg mt-2">
                 {suggestionChips.map((prompt) => (
                   <button
-                    key={prompt.text}
+                    key={prompt}
                     type="button"
-                    onClick={() => {
-                      setInput(prompt.text);
-                      setTimeout(() => {
-                        const sendBtn = document.querySelector(
-                          '[title="Send"]'
-                        ) as HTMLButtonElement;
-                        if (sendBtn) sendBtn.click();
-                      }, 100);
-                    }}
+                    onClick={() => triggerPrompt(prompt)}
                     className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-300 hover:bg-white/10 hover:text-zinc-100 transition-colors"
                   >
-                    {prompt.emoji} {prompt.text}
+                    {prompt}
                   </button>
                 ))}
               </div>
@@ -959,6 +1148,30 @@ export default function Chat() {
                   ].join(" ")
                 : "";
 
+              const sectioned = parseNovaSections(m.content || "");
+              const nextStep = extractNextStepText(m.content || "");
+              const messageKey = `${i}-${m.ts || "no-ts"}`;
+              const followUpButtons: Array<{ label: string; prompt: string }> = nextStep
+                ? [
+                    {
+                      label: "What should I do tomorrow?",
+                      prompt: `My current next step is: ${nextStep}\n\nWhat should I do tomorrow morning?`,
+                    },
+                    {
+                      label: "Build a 7-day plan",
+                      prompt: `My current next step is: ${nextStep}\n\nBuild a practical 7-day plan for me.`,
+                    },
+                    {
+                      label: "Make it simpler",
+                      prompt: `My current next step is: ${nextStep}\n\nMake this simpler and easier to execute.`,
+                    },
+                    {
+                      label: "Hold me accountable",
+                      prompt: `My current next step is: ${nextStep}\n\nHelp me stay accountable for this.`,
+                    },
+                  ]
+                : [];
+
               return (
                 <div key={i}>
                   <div
@@ -980,19 +1193,112 @@ export default function Chat() {
                       {isUser ? (
                         m.content
                       ) : (
-                        <div className="flex flex-row flex-wrap items-baseline gap-x-2 gap-y-1">
-                          {!isUser && (
-                            <span className="text-[11px] font-medium text-zinc-500 mr-2 select-none">
-                              NOVA
-                            </span>
-                          )}
-                          <div className="min-w-0 flex-1">
-                            {m.fileTaskResult ? (
-                              renderStructured(m.fileTaskResult)
-                            ) : (
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-2 text-[11px] font-medium text-zinc-500 select-none">NOVA</div>
+
+                          {m.fileTaskResult ? (
+                            renderStructured(m.fileTaskResult)
+                          ) : sectioned.length >= 2 ? (
+                            <div className="space-y-3">
+                              {sectioned.map((section) => {
+                                const isNextStepSection =
+                                  section.title.toLowerCase() === "your next step";
+                                return (
+                                  <section
+                                    key={`${messageKey}-${section.title}`}
+                                    className={[
+                                      "rounded-lg border px-3 py-3",
+                                      isNextStepSection
+                                        ? "border-amber-300/30 bg-amber-300/10"
+                                        : "border-white/10 bg-white/5",
+                                    ].join(" ")}
+                                  >
+                                    <h4 className="text-sm font-semibold text-zinc-100">
+                                      {section.title}
+                                    </h4>
+                                    <div className="mt-1 text-sm leading-relaxed text-zinc-200">
+                                      <MarkdownRenderer content={section.body} />
+                                    </div>
+                                  </section>
+                                );
+                              })}
+
+                              {nextStep && (
+                                <div className="space-y-2 rounded-lg border border-amber-300/40 bg-amber-300/10 px-3 py-3">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-200">
+                                    Next Step
+                                  </div>
+                                  <div className="text-sm font-medium text-zinc-100">{nextStep}</div>
+
+                                  <div className="flex flex-wrap gap-2 pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => void copyNextStep(nextStep, messageKey)}
+                                      className="rounded-md border border-white/15 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10"
+                                    >
+                                      {copiedNextStepKey === messageKey ? "Copied" : "Copy next step"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => savePlan(nextStep, messageKey)}
+                                      className="rounded-md border border-white/15 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10"
+                                    >
+                                      {savedPlanKey === messageKey ? "Saved" : "Save plan"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => triggerPrompt(`Why this approach?\n\nMy current next step: ${nextStep}`)}
+                                      className="rounded-md border border-white/15 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10"
+                                    >
+                                      Why this?
+                                    </button>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-2 pt-1">
+                                    {followUpButtons.map((action) => (
+                                      <button
+                                        key={action.label}
+                                        type="button"
+                                        onClick={() => triggerPrompt(action.prompt)}
+                                        className="rounded-md border border-white/15 px-2 py-1 text-xs text-zinc-300 hover:bg-white/10 hover:text-zinc-100"
+                                      >
+                                        {action.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
                               <MarkdownRenderer content={m.content} />
-                            )}
-                          </div>
+
+                              {nextStep && (
+                                <div className="space-y-2 rounded-lg border border-amber-300/35 bg-amber-300/10 px-3 py-3">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-200">
+                                    Next Step
+                                  </div>
+                                  <div className="text-sm font-medium text-zinc-100">{nextStep}</div>
+                                  <div className="flex flex-wrap gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => void copyNextStep(nextStep, messageKey)}
+                                      className="rounded-md border border-white/15 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10"
+                                    >
+                                      {copiedNextStepKey === messageKey ? "Copied" : "Copy next step"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => triggerPrompt(`My current next step is: ${nextStep}\n\nWhat should I do tomorrow?`)}
+                                      className="rounded-md border border-white/15 px-2 py-1 text-xs text-zinc-200 hover:bg-white/10"
+                                    >
+                                      What should I do tomorrow?
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1011,10 +1317,47 @@ export default function Chat() {
               );
             })}
 
+          {safetyCards.map((card) => (
+            <div key={card.id} className="flex items-start justify-start">
+              <div className="max-w-[85%] rounded-2xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm leading-relaxed text-zinc-100">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-red-200">
+                  Nova Safety Mode
+                </div>
+                {card.error ? (
+                  <p className="text-xs text-red-200">{card.error}</p>
+                ) : card.decision ? (
+                  <div className="space-y-2">
+                    <p>
+                      <span className="text-zinc-400">Risk:</span>{" "}
+                      <span className="font-medium uppercase">{card.decision.risk_level}</span>
+                    </p>
+                    <p>
+                      <span className="text-zinc-400">Action:</span>{" "}
+                      <span className="font-medium">{card.decision.primary_action}</span>
+                    </p>
+                    {card.decision.emergency_number && (
+                      <p>
+                        <span className="text-zinc-400">Emergency:</span>{" "}
+                        <span className="font-medium">{card.decision.emergency_number}</span>
+                      </p>
+                    )}
+                    {card.decision.steps.length > 0 && (
+                      <ul className="list-disc space-y-1 pl-5 text-zinc-200">
+                        {card.decision.steps.map((step, index) => (
+                          <li key={`${card.id}-step-${index}`}>{step}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+
           {loading && (
             <div className="flex items-start justify-start">
               <div className="max-w-[85%] pt-1 text-sm text-zinc-200">
-                Nova is thinking…
+                Nova is building your next step…
               </div>
             </div>
           )}
@@ -1195,6 +1538,10 @@ export default function Chat() {
                   />
                 </svg>
               </button>
+            </div>
+
+            <div className="px-1 text-[11px] text-zinc-500">
+              Nova helps you get clear, choose what matters, and take the next real step.
             </div>
           </div>
 
