@@ -759,24 +759,35 @@ export default function Chat() {
   // --------------------
   // Safety Mode (deterministic backend check)
   // --------------------
-  function maybeTriggerSafetyCheck(text: string) {
+  async function handleSafetyMessage(text: string): Promise<boolean> {
     const payload = detectSafetyFromMessage(text);
-    if (!payload) return;
+    if (!payload) return false;
+
+    sendingRef.current = true;
+    setInput("");
+    setLoading(true);
+    setBriefing(null);
+    setErr(null);
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
 
     const cardId = `safety-${Date.now()}`;
-    void fetchSafetyDecision(payload)
-      .then((decision) => {
-        setSafetyCards((prev) => [...prev, { id: cardId, decision }]);
-      })
-      .catch((e) => {
-        setSafetyCards((prev) => [
-          ...prev,
-          {
-            id: cardId,
-            error: e instanceof Error ? e.message : "Safety check unavailable.",
-          },
-        ]);
-      });
+    try {
+      const decision = await fetchSafetyDecision(payload);
+      setSafetyCards((prev) => [...prev, { id: cardId, decision }]);
+    } catch (e) {
+      setSafetyCards((prev) => [
+        ...prev,
+        {
+          id: cardId,
+          error: e instanceof Error ? e.message : "Safety check unavailable.",
+        },
+      ]);
+    } finally {
+      sendingRef.current = false;
+      setLoading(false);
+    }
+
+    return true;
   }
 
   // --------------------
@@ -790,6 +801,10 @@ export default function Chat() {
     if (sendingRef.current) return;
     if (uploading) return;
 
+    if (await handleSafetyMessage(text)) {
+      return;
+    }
+
     // Attached file: agent structured response (no chat stream)
     if (hasFile) {
       sendingRef.current = true;
@@ -799,7 +814,6 @@ export default function Chat() {
       setErr(null);
 
       setMessages((prev) => [...prev, { role: "user", content: text }]);
-      maybeTriggerSafetyCheck(text);
 
       try {
         const result = await sendFileTask(text);
@@ -832,7 +846,6 @@ export default function Chat() {
 
     // Optimistic UI: add user message
     setMessages((prev) => [...prev, { role: "user", content: text }]);
-    maybeTriggerSafetyCheck(text);
 
     const category = detectCategory(text);
     const contract = responseContract(category);
@@ -1323,6 +1336,9 @@ export default function Chat() {
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-red-200">
                   Nova Safety Mode
                 </div>
+                <p className="text-xs text-red-100">
+                  Nova paused normal chat to prioritize safety.
+                </p>
                 {card.error ? (
                   <p className="text-xs text-red-200">{card.error}</p>
                 ) : card.decision ? (

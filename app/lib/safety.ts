@@ -4,7 +4,7 @@ export type SafetyDecisionPayload = {
   message: string;
   danger_type: string;
   country_code: string;
-  battery_level: null;
+  battery_level: number | null;
   network_status: string;
   location_available: boolean;
   trusted_contact_available: boolean;
@@ -41,13 +41,38 @@ const LOST_PHRASES = ["lost", "can't find my way", "where am i"];
 
 const PANIC_PHRASES = ["panic", "panicking", "scared", "terrified", "anxiety"];
 
+const LOW_BATTERY_PHRASES = [
+  "battery is low",
+  "low battery",
+  "battery dying",
+  "phone dying",
+  "battery dead",
+];
+
+const OFFLINE_PHRASES = ["offline", "no signal", "no internet", "no network"];
+
+function inferBatteryLevel(lower: string): number | null {
+  if (LOW_BATTERY_PHRASES.some((phrase) => lower.includes(phrase))) {
+    return 8;
+  }
+  return null;
+}
+
+function inferNetworkStatus(lower: string): string {
+  if (OFFLINE_PHRASES.some((phrase) => lower.includes(phrase))) {
+    return "offline";
+  }
+  return "online";
+}
+
 function basePayload(message: string, danger_type: string): SafetyDecisionPayload {
+  const lower = message.toLowerCase();
   return {
     message,
     danger_type,
     country_code: "US",
-    battery_level: null,
-    network_status: "online",
+    battery_level: inferBatteryLevel(lower),
+    network_status: inferNetworkStatus(lower),
     location_available: false,
     trusted_contact_available: false,
     user_can_talk: true,
