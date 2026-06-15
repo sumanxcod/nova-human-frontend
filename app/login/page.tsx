@@ -13,6 +13,7 @@ export default function LoginPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const signupHint = Boolean(error && /sign up/i.test(error));
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -22,9 +23,6 @@ export default function LoginPage() {
     try {
       const email = (emailRef.current?.value || "").trim().toLowerCase();
       const password = passwordRef.current?.value || "";
-
-      // Debug once (remove later)
-      console.log("LOGIN_PAYLOAD", { email, passwordLen: password.length });
 
       await login(email, password);
 
@@ -46,8 +44,23 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
-              {error}
+            <div
+              className={
+                signupHint
+                  ? "mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100"
+                  : "mb-6 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300"
+              }
+              role="alert"
+            >
+              <p className={signupHint ? "font-medium text-amber-50" : undefined}>{error}</p>
+              {signupHint && (
+                <a
+                  href="/signup"
+                  className="mt-3 inline-block text-sm font-medium text-blue-400 hover:text-blue-300 hover:underline"
+                >
+                  Go to sign up
+                </a>
+              )}
             </div>
           )}
 

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { clearToken, getToken, setToken as persistToken } from "../lib/auth";
-import { apiFetch } from "../lib/api";
+import { apiFetch, parseApiErrorMessage } from "../lib/api";
 
 type User = {
   id?: string;
@@ -65,11 +65,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authReady,
       isAuthed: !!token,
       login: async (email: string, password: string) => {
-        const data = await apiFetch<any>("/auth/login", {
-          method: "POST",
-          auth: false,
-          body: JSON.stringify({ email, password }),
-        });
+        let data: any;
+        try {
+          data = await apiFetch<any>("/auth/login", {
+            method: "POST",
+            auth: false,
+            body: JSON.stringify({ email, password }),
+          });
+        } catch (e) {
+          const msg = parseApiErrorMessage(e);
+          throw new Error(msg || "Login failed. Please try again.");
+        }
         const newToken = data?.token || data?.access_token;
         if (!newToken) throw new Error("Missing token from server.");
 
